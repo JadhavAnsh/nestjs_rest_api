@@ -12,6 +12,10 @@ import { CreateQuestionDto } from './create-question.dto';
 export class CreateExamDto {
   @IsString()
   @IsNotEmpty()
+  examId?: string;
+
+  @IsString()
+  @IsNotEmpty()
   title: string;
 
   @IsString()
