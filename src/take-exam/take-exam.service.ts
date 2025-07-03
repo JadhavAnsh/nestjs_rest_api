@@ -3,10 +3,8 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { CreateExamDto } from './dto/create-exam.dto';
 import { Exam } from './schema/exam.schema';
-import {
-  cleanQuestionPayload,
-  cleanQuestionResponse,
-} from './utils/cleanQuestionPayload';
+import { cleanQuestionPayload, cleanQuestionResponse } from './utils/cleanQuestionPayload';
+
 
 @Injectable()
 export class TakeExamService {
@@ -23,7 +21,7 @@ export class TakeExamService {
   }
 
   async getExamById(id: string): Promise<any> {
-    const exam = await this.examModel.findById(id).lean(); // lean is important
+    const exam = await this.examModel.findById(id).lean();
     if (!exam) {
       throw new NotFoundException('Exam not found');
     }
@@ -33,12 +31,12 @@ export class TakeExamService {
   }
 
   async createExam(createExamDto: CreateExamDto): Promise<Exam> {
-    const cleanedQuestions = createExamDto.Questions.map(
-      (q) => cleanQuestionPayload({ ...q }), // clone first!
+    const cleanedQuestions = createExamDto.Questions.map((q) =>
+      cleanQuestionPayload({ ...q }),
     );
 
     const cleanExamPayload = {
-      examId: createExamDto.examId, // generate a unique ID if not provided
+      examId: createExamDto.examId || undefined,
       title: createExamDto.title,
       ExamDomain: createExamDto.ExamDomain,
       description: createExamDto.description,
@@ -52,6 +50,6 @@ export class TakeExamService {
 
     const exam = new this.examModel(cleanExamPayload);
     await exam.save();
-    return exam;
+    return exam.toObject(); // Convert to plain object for consistent response
   }
 }

@@ -9,31 +9,33 @@ export class Question {
   @Prop({ required: true })
   question: string;
 
-  @Prop({ type: [String], required: true })
+  @Prop({ type: [String], required: true, minlength: 1, maxlength: 4 })
   exam_options: string[];
 
   @Prop({ required: true, enum: QuestionType })
   question_type: QuestionType;
 
-  @Prop()
-  correct_options?: number;
-
   @Prop({
     type: [Number],
-    default: undefined,
+    required: true,
     validate: {
       validator: function (val: number[]) {
-        if (this.question_type !== QuestionType.MULTIPLE_CHOICE) return true;
-        return Array.isArray(val) && val.length === 2;
+        if (this.question_type === QuestionType.SINGLE_CHOICE) {
+          return Array.isArray(val) && val.length === 1 && val.every((v) => Number.isInteger(v) && v >= 0 && v < this.exam_options.length);
+        }
+        if (this.question_type === QuestionType.MULTIPLE_CHOICE) {
+          return Array.isArray(val) && val.length >= 2 && val.every((v) => Number.isInteger(v) && v >= 0 && v < this.exam_options.length);
+        }
+        if (this.question_type === QuestionType.TRUE_FALSE) {
+          return Array.isArray(val) && val.length === 1 && val.every((v) => Number.isInteger(v) && v >= 0 && v < 2);
+        }
+        return false;
       },
-      message: 'Multiple choice must have exactly 2 correct options',
+      message: 'Invalid correct option indexes for the specified question type',
     },
   })
-  correct_multiple_options?: number[];
-
-  @Prop()
-  correct_boolean_option?: boolean;
+  correct_options: number[];
 }
 
 export const QuestionSchema = SchemaFactory.createForClass(Question);
-QuestionSchema.set('minimize', true); // ✅ removes undefined/null from subdocs
+QuestionSchema.set('minimize', true);

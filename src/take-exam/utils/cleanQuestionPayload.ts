@@ -3,29 +3,33 @@ import { QuestionType } from 'src/common/enum/question-type.enum';
 function cleanQuestionPayload(question: any) {
   const q = { ...question }; // Shallow clone
 
-  // Ensure correct_multiple_options is only included for MCQ and has exactly 2 valid numbers
-  if (q.question_type === QuestionType.MULTIPLE_CHOICE) {
+  // Validate and clean correct_option_indexes based on question type
+  if (q.question_type === QuestionType.SINGLE_CHOICE) {
     if (
-      !Array.isArray(q.correct_multiple_options) ||
-      q.correct_multiple_options.length !== 2 ||
-      !q.correct_multiple_options.every((v: any) => typeof v === 'number')
+      !Array.isArray(q.correct_options) ||
+      q.correct_options.length !== 1 ||
+      !q.correct_options.every((v: any) => Number.isInteger(Number(v)) && Number(v) >= 0)
     ) {
-      delete q.correct_multiple_options; // Remove invalid or empty array
+      delete q.correct_options; // Remove invalid array
     }
-    delete q.correct_options;
-    delete q.correct_boolean_option;
-  } else if (q.question_type === QuestionType.SINGLE_CHOICE) {
-    delete q.correct_multiple_options;
-    delete q.correct_boolean_option;
-    if (typeof q.correct_options !== 'number') {
-      delete q.correct_options; // Ensure valid number
+  } else if (q.question_type === QuestionType.MULTIPLE_CHOICE) {
+    if (
+      !Array.isArray(q.correct_options) ||
+      q.correct_options.length < 2 ||
+      !q.correct_options.every((v: any) => Number.isInteger(Number(v)) && Number(v) >= 0)
+    ) {
+      delete q.correct_options; // Remove invalid array
     }
   } else if (q.question_type === QuestionType.TRUE_FALSE) {
-    delete q.correct_options;
-    delete q.correct_multiple_options;
-    if (typeof q.correct_boolean_option !== 'boolean') {
-      delete q.correct_boolean_option; // Ensure valid boolean
+    if (
+      !Array.isArray(q.correct_options) ||
+      q.correct_options.length !== 1 ||
+      !q.correct_options.every((v: any) => Number.isInteger(Number(v)) && v >= 0 && v < 2)
+    ) {
+      delete q.correct_options; // Remove invalid array
     }
+  } else {
+    delete q.correct_options; // Remove if question_type is invalid
   }
 
   // Remove any undefined, null, or empty array fields
@@ -45,14 +49,15 @@ function cleanQuestionPayload(question: any) {
 
 function cleanQuestionResponse(question: any) {
   const cleaned = { ...question };
-  if (cleaned.question_type !== QuestionType.SINGLE_CHOICE) {
+  // Ensure correct_option_indexes is only included if valid for the question type
+  if (
+    !cleaned.question_type ||
+    !Array.isArray(cleaned.correct_options) ||
+    (cleaned.question_type === QuestionType.SINGLE_CHOICE && cleaned.correct_options.length !== 1) ||
+    (cleaned.question_type === QuestionType.MULTIPLE_CHOICE && cleaned.correct_options.length < 2) ||
+    (cleaned.question_type === QuestionType.TRUE_FALSE && (cleaned.correct_options.length !== 1 || !cleaned.correct_options.every((v: number) => v >= 0 && v < 2)))
+  ) {
     delete cleaned.correct_options;
-  }
-  if (cleaned.question_type !== QuestionType.MULTIPLE_CHOICE) {
-    delete cleaned.correct_multiple_options;
-  }
-  if (cleaned.question_type !== QuestionType.TRUE_FALSE) {
-    delete cleaned.correct_boolean_option;
   }
   return cleaned;
 }
