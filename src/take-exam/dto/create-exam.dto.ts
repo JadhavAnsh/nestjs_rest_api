@@ -3,9 +3,9 @@ import {
   IsArray,
   IsNotEmpty,
   IsNumber,
-  IsOptional,
   IsString,
-  ValidateNested,
+  Max,
+  ValidateNested
 } from 'class-validator';
 import { CreateQuestionDto } from './create-question.dto';
 
@@ -15,28 +15,36 @@ export class CreateExamDto {
   title: string;
 
   @IsString()
-  @IsOptional()
+  @IsNotEmpty()
   ExamDomain?: string;
 
   @IsString()
-  @IsOptional()
-  description?: string;
+  @IsNotEmpty()
+  description: string;
 
   @IsNumber()
+  @IsNotEmpty()
   passingScore: number;
 
   @IsNumber()
+  @IsNotEmpty()
+  @Max(3)
+  examAttempts: number;
+
+  @IsNumber()
+  @IsNotEmpty()
   time: number;
 
   @IsString()
-  @IsOptional()
+  @IsNotEmpty()
   levels?: string;
 
   @IsArray()
-  @IsOptional()
-  QualificationTags?: string[];
+  @IsNotEmpty()
+  QualificationTags: string[];
 
   @IsArray()
+  @IsNotEmpty()
   @ValidateNested({ each: true })
   @Type(() => CreateQuestionDto)
   Questions: CreateQuestionDto[];

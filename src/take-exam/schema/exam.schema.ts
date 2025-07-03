@@ -16,6 +16,9 @@ export class Exam extends Document {
   @Prop({ required: true })
   passingScore: number;
 
+  @Prop({ required: true, max: 3 })
+  examAttempts: number;
+
   @Prop({ required: true })
   time: number;
 
