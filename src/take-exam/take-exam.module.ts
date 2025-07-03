@@ -1,14 +1,19 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { Exam, ExamSchema } from './schema/exam.schema';
+import { examProgress, examProgressSchema } from './schema/exam-progress.schema';
 import { TakeExamController } from './take-exam.controller';
 import { TakeExamService } from './take-exam.service';
+import { TakeExamProgressService } from './take-examProgress.service';
 
 @Module({
   imports: [
-    MongooseModule.forFeature([{ name: Exam.name, schema: ExamSchema }])
+    MongooseModule.forFeature([
+      { name: Exam.name, schema: ExamSchema },
+      { name: examProgress.name, schema: examProgressSchema }
+    ])
   ],
   controllers: [TakeExamController],
-  providers: [TakeExamService],
+  providers: [TakeExamService, TakeExamProgressService],
 })
 export class TakeExamModule {}

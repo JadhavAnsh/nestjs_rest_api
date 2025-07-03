@@ -9,11 +9,11 @@ import { UsersModule } from './users/users.module';
 
 @Module({
   imports: [
-    // ✅ Load environment variables from .env file
+    //  Load environment variables from .env file
     ConfigModule.forRoot({
       isGlobal: true,
     }),
-    // ✅ Connect to MongoDB using Mongoose
+    //  Connect to MongoDB using Mongoose
     MongooseModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
