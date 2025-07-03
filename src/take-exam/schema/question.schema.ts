@@ -1,9 +1,11 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document } from 'mongoose';
+import { HydratedDocument } from 'mongoose';
 import { QuestionType } from 'src/common/enum/question-type.enum';
 
+export type QuestionDocument = HydratedDocument<Question>;
+
 @Schema({ _id: false })
-export class Question extends Document {
+export class Question {
   @Prop({ required: true })
   question: string;
 
@@ -13,19 +15,12 @@ export class Question extends Document {
   @Prop({ required: true, enum: QuestionType })
   question_type: QuestionType;
 
-  @Prop({
-    type: Number,
-    required: function (this: Question) {
-      return this.question_type === QuestionType.SINGLE_CHOICE;
-    },
-  })
+  @Prop()
   correct_options?: number;
 
   @Prop({
     type: [Number],
-    required: function (this: Question) {
-      return this.question_type === QuestionType.MULTIPLE_CHOICE;
-    },
+    default: undefined,
     validate: {
       validator: function (val: number[]) {
         if (this.question_type !== QuestionType.MULTIPLE_CHOICE) return true;
@@ -36,13 +31,9 @@ export class Question extends Document {
   })
   correct_multiple_options?: number[];
 
-  @Prop({
-    type: Boolean,
-    required: function (this: Question) {
-      return this.question_type === QuestionType.TRUE_FALSE;
-    },
-  })
+  @Prop()
   correct_boolean_option?: boolean;
 }
 
 export const QuestionSchema = SchemaFactory.createForClass(Question);
+QuestionSchema.set('minimize', true); // ✅ removes undefined/null from subdocs

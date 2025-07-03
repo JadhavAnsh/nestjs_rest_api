@@ -5,6 +5,9 @@ import { Question, QuestionSchema } from './question.schema';
 @Schema()
 export class Exam extends Document {
   @Prop({ required: true })
+  examId: string;
+
+  @Prop({ required: true })
   title: string;
 
   @Prop()
@@ -33,3 +36,4 @@ export class Exam extends Document {
 }
 
 export const ExamSchema = SchemaFactory.createForClass(Exam);
+ExamSchema.set('minimize', true); // ✅ removes undefined/null from Questions array
