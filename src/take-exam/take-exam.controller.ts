@@ -33,5 +33,12 @@ export class TakeExamController {
   async createExam(@Body() createExamDto: CreateExamDto): Promise<Exam> {
     return this.takeExamService.createExam(createExamDto);
   }
-  
+
+  @Post('progress/:examId')
+  async submitExamProgress(
+    @Param('examId') examId: string,
+    @Body() examProgressData: any,
+  ) {
+    return await this.takeExamProgressService.saveOrUpdateProgress(examProgressData);
+  }
 }
