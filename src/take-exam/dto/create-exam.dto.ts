@@ -1,55 +1,48 @@
-import { Type } from 'class-transformer';
-import {
-  IsArray,
-  IsNotEmpty,
-  IsNumber,
-  IsString,
-  Max,
-  ValidateNested
-} from 'class-validator';
-import { CreateQuestionDto } from './create-question.dto';
+import { Type } from "class-transformer";
+import { IsArray, IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, Max, Min, ValidateNested } from "class-validator";
+import { ExamLevel } from "src/common/enum/exam-level.enum";
+import { CreateQuestionDto } from "./create-question.dto";
 
 export class CreateExamDto {
   @IsString()
   @IsNotEmpty()
-  examId?: string;
+  roadmap_ID: string;
 
   @IsString()
   @IsNotEmpty()
-  title: string;
+  exam_ID: string;
 
   @IsString()
   @IsNotEmpty()
-  ExamDomain?: string;
+  exam_title: string;
 
   @IsString()
-  @IsNotEmpty()
-  description: string;
+  @IsOptional()
+  exam_description?: string;
 
   @IsNumber()
   @IsNotEmpty()
-  passingScore: number;
+  @Min(0)
+  @Max(100)
+  passing_score: number;
 
   @IsNumber()
   @IsNotEmpty()
-  @Max(3)
-  examAttempts: number;
+  @Min(1)
+  exam_time: number;
 
-  @IsNumber()
+  @IsEnum(ExamLevel)
   @IsNotEmpty()
-  time: number;
-
-  @IsString()
-  @IsNotEmpty()
-  levels?: string;
+  exam_levels: ExamLevel;
 
   @IsArray()
-  @IsNotEmpty()
-  QualificationTags: string[];
+  @IsString({ each: true })
+  @IsOptional()
+  tags?: string[];
 
   @IsArray()
-  @IsNotEmpty()
   @ValidateNested({ each: true })
   @Type(() => CreateQuestionDto)
-  Questions: CreateQuestionDto[];
+  @IsNotEmpty()
+  exam_questions: CreateQuestionDto[];
 }

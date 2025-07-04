@@ -1,10 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { CreateExamDto } from './dto/create-exam.dto';
 import { Exam } from './schema/exam.schema';
-import { cleanQuestionPayload, cleanQuestionResponse } from './utils/cleanQuestionPayload';
-
 
 @Injectable()
 export class TakeExamService {
@@ -12,44 +10,48 @@ export class TakeExamService {
     @InjectModel(Exam.name) private readonly examModel: Model<Exam>,
   ) {}
 
-  async getAllExams(): Promise<any[]> {
-    const exams = await this.examModel.find().lean();
-    return exams.map((exam) => ({
-      ...exam,
-      Questions: exam.Questions.map((q) => cleanQuestionResponse(q)),
-    }));
-  }
-
-  async getExamById(id: string): Promise<any> {
-    const exam = await this.examModel.findById(id).lean();
-    if (!exam) {
-      throw new NotFoundException('Exam not found');
+    async getExamByRoadmapId(roadmapId: string): Promise<Exam> {
+    try {
+      const exam = await this.examModel.findOne({ roadmap_ID: roadmapId }).exec();
+      if (!exam) {
+        throw new NotFoundException(`Exam with roadmap_ID ${roadmapId} not found`);
+      }
+      return exam;
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Failed to retrieve exam');
     }
-
-    exam.Questions = exam.Questions.map((q) => cleanQuestionResponse(q));
-    return exam;
   }
 
   async createExam(createExamDto: CreateExamDto): Promise<Exam> {
-    const cleanedQuestions = createExamDto.Questions.map((q) =>
-      cleanQuestionPayload({ ...q }),
-    );
+    try {
+      // Check if exam_ID already exists
+      const existingExam = await this.examModel.findOne({ exam_ID: createExamDto.exam_ID }).exec();
+      if (existingExam) {
+        throw new ConflictException(`Exam with ID ${createExamDto.exam_ID} already exists`);
+      }
 
-    const cleanExamPayload = {
-      examId: createExamDto.examId || undefined,
-      title: createExamDto.title,
-      ExamDomain: createExamDto.ExamDomain,
-      description: createExamDto.description,
-      passingScore: createExamDto.passingScore,
-      examAttempts: createExamDto.examAttempts,
-      time: createExamDto.time,
-      levels: createExamDto.levels,
-      QualificationTags: createExamDto.QualificationTags,
-      Questions: cleanedQuestions,
-    };
+      // Create new exam instance
+      const exam = new this.examModel({
+        ...createExamDto,
+        exam_questions: createExamDto.exam_questions.map((question) => ({
+          question: question.question,
+          exam_options: question.exam_options,
+          question_type: question.question_type,
+          correct_options: question.correct_options,
+        })),
+      });
 
-    const exam = new this.examModel(cleanExamPayload);
-    await exam.save();
-    return exam.toObject(); // Convert to plain object for consistent response
+      // Save to database
+      const savedExam = await exam.save();
+      return savedExam;
+    } catch (error) {
+      if (error instanceof ConflictException) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Failed to create exam');
+    }
   }
 }

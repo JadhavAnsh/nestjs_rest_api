@@ -1,39 +1,38 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document } from 'mongoose';
+import { ExamLevel } from 'src/common/enum/exam-level.enum';
 import { Question, QuestionSchema } from './question.schema';
 
-@Schema()
+@Schema({ timestamps: true })
 export class Exam extends Document {
-  @Prop({ required: true })
-  examId: string;
+  @Prop({ required: true, unique: true })
+  roadmap_ID: string; // "Take reference from roadmap schema"
 
-  @Prop({ required: true })
-  title: string;
+  @Prop({ required: true, unique: true })
+  exam_ID: string; // "Auto generated ID by function"
 
-  @Prop()
-  ExamDomain: string;
-
-  @Prop()
-  description: string;
-
-  @Prop({ required: true })
-  passingScore: number;
-
-  @Prop({ required: true, max: 3 })
-  examAttempts: number;
-
-  @Prop({ required: true })
-  time: number;
+  @Prop({ required: true, unique: true })
+  exam_title: string; // "Title of the Exam as per the roadmap"
 
   @Prop()
-  levels: string;
+  exam_description: string; // "Exam description not the roadmap"
 
-  @Prop({ type: [String] })
-  QualificationTags: string[];
+  @Prop({ required: true, min: 0, max: 100 })
+  passing_score: number; // "Passing score needed to pass the exam eg: 80%"
+
+  @Prop({ required: true, min: 1 })
+  exam_time: number; // "Time in minutes to complete the exam"
+
+  @Prop({ required: true, enum: ExamLevel })
+  exam_levels: ExamLevel; // "easy", "medium", "hard" Its an Enum
+
+  @Prop({ type: [String], index: true })
+  tags: string[]; // "Technologies used in the exam"
 
   @Prop({ type: [QuestionSchema], required: true })
-  Questions: Question[];
+  exam_questions: Question[]; // "Questions of the Exam" Its an Array
 }
 
 export const ExamSchema = SchemaFactory.createForClass(Exam);
-ExamSchema.set('minimize', true); // ✅ removes undefined/null from Questions array
+ExamSchema.set('minimize', true);
+ExamSchema.index({ tags: 1 }); // Index for efficient tag queries

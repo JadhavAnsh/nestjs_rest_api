@@ -1,11 +1,11 @@
 import {
-  BadRequestException,
   Body,
   Controller,
   Get,
+  NotFoundException,
   Param,
   Post,
-  Query,
+  Query
 } from '@nestjs/common';
 import { CreateExamDto } from './dto/create-exam.dto';
 import { Exam } from './schema/exam.schema';
@@ -20,13 +20,12 @@ export class TakeExamController {
   ) {}
 
   @Get()
-  async getAllExams(): Promise<Exam[]> {
-    return this.takeExamService.getAllExams();
-  }
-
-  @Get(':id')
-  async getExamById(@Param('id') id: string): Promise<Exam> {
-    return this.takeExamService.getExamById(id);
+  async getExamByRoadmapId(@Query('roadmap_ID') roadmapId: string): Promise<Exam> {
+    const exam = await this.takeExamService.getExamByRoadmapId(roadmapId);
+    if (!exam) {
+      throw new NotFoundException(`Exam with roadmap_ID ${roadmapId} not found`);
+    }
+    return exam;
   }
 
   @Post()

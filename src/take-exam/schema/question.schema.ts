@@ -6,14 +6,23 @@ export type QuestionDocument = HydratedDocument<Question>;
 
 @Schema({ _id: false })
 export class Question {
-  @Prop({ required: true })
-  question: string;
+  @Prop({ required: true, trim: true, minlength: 1 })
+  question: string; // "Questions for exam"
 
-  @Prop({ type: [String], required: true, minlength: 1, maxlength: 4 })
-  exam_options: string[];
+  @Prop({
+    type: [String],
+    required: true,
+    minlength: 1,
+    maxlength: 4,
+    validate: {
+      validator: (options: string[]) => options.every((opt) => opt.trim().length > 0),
+      message: 'Exam options cannot be empty strings',
+    },
+  })
+  exam_options: string[]; // "Options for each question"
 
-  @Prop({ required: true, enum: QuestionType })
-  question_type: QuestionType;
+  @Prop({ required: true, enum: QuestionType, index: true })
+  question_type: QuestionType; // "Question type (single_choice, multiple_choice, true_false)"
 
   @Prop({
     type: [Number],
@@ -31,10 +40,10 @@ export class Question {
         }
         return false;
       },
-      message: 'Invalid correct option indexes for the specified question type',
+      message: 'Invalid correct option indexes for the specified question type or out of bounds',
     },
   })
-  correct_options: number[];
+  correct_options: number[]; // "Correct option indexes"
 }
 
 export const QuestionSchema = SchemaFactory.createForClass(Question);
