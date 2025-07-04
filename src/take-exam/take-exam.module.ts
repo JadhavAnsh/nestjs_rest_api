@@ -4,7 +4,7 @@ import { Exam, ExamSchema } from './schema/exam.schema';
 import { ExamProgress, ExamProgressSchema } from './schema/exam-progress.schema';
 import { TakeExamController } from './take-exam.controller';
 import { TakeExamService } from './take-exam.service';
-import { TakeExamProgressService } from './take-examProgress.service';
+import { ExamProgressService } from './take-examProgress.service';
 
 @Module({
   imports: [
@@ -14,6 +14,6 @@ import { TakeExamProgressService } from './take-examProgress.service';
     ])
   ],
   controllers: [TakeExamController],
-  providers: [TakeExamService, TakeExamProgressService],
+  providers: [TakeExamService, ExamProgressService],
 })
 export class TakeExamModule {}
