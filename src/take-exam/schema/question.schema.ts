@@ -33,7 +33,7 @@ export class Question {
           return Array.isArray(val) && val.length === 1 && val.every((v) => Number.isInteger(v) && v >= 0 && v < this.exam_options.length);
         }
         if (this.question_type === QuestionType.MULTIPLE_CHOICE) {
-          return Array.isArray(val) && val.length >= 2 && val.every((v) => Number.isInteger(v) && v >= 0 && v < this.exam_options.length);
+          return Array.isArray(val) && val.length === 2 && val.every((v) => Number.isInteger(v) && v >= 0 && v < this.exam_options.length);
         }
         if (this.question_type === QuestionType.TRUE_FALSE) {
           return Array.isArray(val) && val.length === 1 && val.every((v) => Number.isInteger(v) && v >= 0 && v < 2);

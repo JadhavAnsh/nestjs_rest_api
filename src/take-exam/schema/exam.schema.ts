@@ -35,4 +35,3 @@ export class Exam extends Document {
 
 export const ExamSchema = SchemaFactory.createForClass(Exam);
 ExamSchema.set('minimize', true);
-ExamSchema.index({ tags: 1 }); // Index for efficient tag queries
