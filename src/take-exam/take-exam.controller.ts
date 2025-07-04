@@ -2,7 +2,12 @@ import {
   Body,
   Controller,
   Get,
+<<<<<<< HEAD
   NotFoundException,
+=======
+  HttpException,
+  HttpStatus,
+>>>>>>> 731880c6c6cd59cb9dd39d8aec19f1e808b37237
   Param,
   Post,
   Query
@@ -10,13 +15,14 @@ import {
 import { CreateExamDto } from './dto/create-exam.dto';
 import { Exam } from './schema/exam.schema';
 import { TakeExamService } from './take-exam.service';
-import { TakeExamProgressService } from './take-examProgress.service';
+import { ExamProgressService } from './take-examProgress.service';
+import { ExamProgressDocument } from './schema/exam-progress.schema';
 
 @Controller('take-exam')
 export class TakeExamController {
   constructor(
     private readonly takeExamService: TakeExamService,
-    private readonly takeExamProgressService: TakeExamProgressService,
+    private readonly takeExamProgressService: ExamProgressService,
   ) {}
 
   @Get()
@@ -33,11 +39,39 @@ export class TakeExamController {
     return this.takeExamService.createExam(createExamDto);
   }
 
-  @Post('progress/:examId')
-  async submitExamProgress(
+  @Post(':examId/calculate')
+  async calculateProgress(
     @Param('examId') examId: string,
-    @Body() examProgressData: any,
-  ) {
-    return await this.takeExamProgressService.saveOrUpdateProgress(examProgressData);
+    @Body() body: { totalQuestions: number; correctQuestions: number },
+  ): Promise<ExamProgressDocument> {
+    try {
+      const { totalQuestions, correctQuestions } = body;
+      if (!totalQuestions || !correctQuestions || totalQuestions < correctQuestions) {
+        throw new HttpException('Invalid input data', HttpStatus.BAD_REQUEST);
+      }
+      return await this.takeExamProgressService.calculateProgress(examId, totalQuestions, correctQuestions);
+    } catch (error) {
+      throw new HttpException(
+        error.message || 'Failed to calculate progress',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
   }
+
+  @Get(':examId')
+  async getProgress(@Query('examId') examId: string): Promise<ExamProgressDocument | null> {
+    try {
+      const progress = await this.takeExamProgressService.getProgress(examId);
+      if (!progress) {
+        throw new HttpException('Progress not found', HttpStatus.NOT_FOUND);
+      }
+      return progress;
+    } catch (error) {
+      throw new HttpException(
+        error.message || 'Failed to retrieve progress',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
 }

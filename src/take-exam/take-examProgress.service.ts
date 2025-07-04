@@ -1,97 +1,92 @@
-import { Injectable, NotFoundException, BadRequestException } from "@nestjs/common";
-import { InjectModel } from "@nestjs/mongoose";
-import { Model } from "mongoose";
-import { Exam } from "./schema/exam.schema";
-import { ExamProgress } from "./schema/exam-progress.schema";
+import { Injectable } from '@nestjs/common';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
+import { ExamProgress, ExamProgressDocument } from './schema/exam-progress.schema';
 
 @Injectable()
-export class TakeExamProgressService {
+export class ExamProgressService {
   constructor(
-    @InjectModel(Exam.name) private readonly examModel: Model<Exam>,
-    @InjectModel(ExamProgress.name) private readonly examProgressModel: Model<ExamProgress>,
+    @InjectModel(ExamProgress.name)
+    private examProgressModel: Model<ExamProgressDocument>,
   ) {}
 
-  // Save or update progress based on examId only
-  async saveOrUpdateProgress(examProgressData: any) {
-    const {
-      examId,
-      totalQuestions,
-      correctQuestions,
-      hasStarted,
-      isCompleted,
-      percentage,
-      completedAt,
-      assessment,
-    } = examProgressData;
-
-    if (!examId) {
-      throw new Error("examId is required");
+  async calculateProgress(
+    examId: string,
+    totalQuestions: number,
+    correctQuestions: number,
+  ): Promise<ExamProgressDocument> {
+    if (totalQuestions <= 0 || correctQuestions < 0 || correctQuestions > totalQuestions) {
+      throw new Error('Invalid input: totalQuestions must be positive and correctQuestions must be valid');
     }
 
-    // Find existing progress by examId only
-    let progress = await this.examProgressModel.findOne({ examId });
+    const percentage = (correctQuestions / totalQuestions) * 100;
+    console.log(`Calculating progress for examId: ${examId}, percentage: ${percentage}`);
 
-    if (progress) {
-      if (progress.assessment.totalAttempts >= 3) {
-        throw new Error("Maximum number of attempts reached");
+    // Find existing progress or create new
+    let progress = await this.examProgressModel.findOne({ examId });
+    console.log(`Existing progress: ${JSON.stringify(progress)}`);
+
+    if (!progress) {
+      console.log('Creating new progress document');
+      progress = new this.examProgressModel({
+        examId,
+        total_questions: totalQuestions,
+        correct_questions: correctQuestions,
+        has_started: true,
+        attempts: 1,
+        highest_percentage: percentage,
+        attempt_Log: [{ percentage, timestamp: new Date() }],
+        lockUntil: null,
+      });
+    } else {
+      // Check if progress is locked
+      if (progress.lockUntil && progress.lockUntil > new Date()) {
+        console.log(`Progress is locked until: ${progress.lockUntil}`);
+        throw new Error(`Progress is locked until ${progress.lockUntil.toISOString()}`);
       }
 
       // Update existing progress
-      progress.totalQuestions = totalQuestions ?? progress.totalQuestions;
-      progress.correctQuestions = correctQuestions ?? progress.correctQuestions;
-      progress.hasStarted = hasStarted ?? progress.hasStarted;
-      progress.isCompleted = isCompleted ?? progress.isCompleted;
-      progress.percentage = percentage ?? progress.percentage;
-      progress.completedAt = completedAt ?? progress.completedAt;
+      progress.correct_questions = correctQuestions;
+      progress.total_questions = totalQuestions;
+      progress.attempts += 1;
+      progress.has_started = true;
+      progress.is_completed = correctQuestions === totalQuestions;
 
-      // Update assessment
-      progress.assessment.totalAttempts += 1;
-      progress.assessment.lastAttemptedAt = new Date();
-
-      if (!progress.assessment.attemptLog) {
-        progress.assessment.attemptLog = [];
+      // Update highest percentage if current is higher
+      if (percentage > progress.highest_percentage) {
+        progress.highest_percentage = percentage;
       }
 
-      progress.assessment.attemptLog.push({
-        attemptedAt: new Date(),
-        percentage,
-        correctQuestions,
-        totalQuestions,
-      });
+      // Add to attempt log
+      progress.attempt_Log.push({ percentage, timestamp: new Date() });
 
-      if (percentage > progress.assessment.maxPercentageAchieved) {
-        progress.assessment.maxPercentageAchieved = percentage;
+      // Apply lock after 3 attempts
+      if (progress.attempts >= 3) {
+        progress.lockUntil = new Date(Date.now() + 24 * 60 * 60 * 1000); // Lock for 24 hours
+        console.log(`Lock applied: attempts=${progress.attempts}, lockUntil=${progress.lockUntil}`);
+      } else {
+        progress.lockUntil = null; // Ensure lock is cleared if attempts < 3
+        console.log(`No lock applied: attempts=${progress.attempts}`);
       }
-
-      await progress.save();
-      return progress;
-    } else {
-      // Create new progress
-      const newProgress = new this.examProgressModel({
-        examId,
-        totalQuestions,
-        correctQuestions,
-        hasStarted,
-        isCompleted,
-        percentage,
-        completedAt,
-        assessment: {
-          totalAttempts: 1,
-          lastAttemptedAt: new Date(),
-          maxPercentageAchieved: percentage,
-          attemptLog: [
-            {
-              attemptedAt: new Date(),
-              percentage,
-              correctQuestions,
-              totalQuestions,
-            },
-          ],
-        },
-      });
-
-      await newProgress.save();
-      return newProgress;
     }
+
+    const savedProgress = await progress.save();
+    console.log(`Saved progress: ${JSON.stringify(savedProgress)}`);
+    return savedProgress;
+  }
+
+  async getProgress(examId: string): Promise<ExamProgressDocument | null> {
+    const progress = await this.examProgressModel.findOne({ examId });
+
+    if (!progress) {
+      return null;
+    }
+
+    // Check if progress is locked
+    if (progress.lockUntil && progress.lockUntil > new Date()) {
+      throw new Error('Progress is locked until ' + progress.lockUntil.toISOString());
+    }
+
+    return progress;
   }
 }
