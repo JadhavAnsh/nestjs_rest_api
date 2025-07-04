@@ -51,7 +51,7 @@ export class TakeExamController {
     } catch (error) {
       throw new HttpException(
         error.message || 'Failed to calculate progress',
-        HttpStatus.INTERNAL_SERVER_ERROR,
+        HttpStatus.BAD_REQUEST,
       );
     }
   }
