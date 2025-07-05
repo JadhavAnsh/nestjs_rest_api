@@ -2,21 +2,18 @@ import {
   Body,
   Controller,
   Get,
-<<<<<<< HEAD
-  NotFoundException,
-=======
   HttpException,
   HttpStatus,
->>>>>>> 731880c6c6cd59cb9dd39d8aec19f1e808b37237
+  NotFoundException,
   Param,
   Post,
   Query
 } from '@nestjs/common';
 import { CreateExamDto } from './dto/create-exam.dto';
+import { ExamProgressDocument } from './schema/exam-progress.schema';
 import { Exam } from './schema/exam.schema';
 import { TakeExamService } from './take-exam.service';
 import { ExamProgressService } from './take-examProgress.service';
-import { ExamProgressDocument } from './schema/exam-progress.schema';
 
 @Controller('take-exam')
 export class TakeExamController {

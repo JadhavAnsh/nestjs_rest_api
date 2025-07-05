@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { HydratedDocument } from 'mongoose';
+import { HydratedDocument, SchemaTypes } from 'mongoose';
 import { QuestionType } from 'src/common/enum/question-type.enum';
 
 export type QuestionDocument = HydratedDocument<Question>;
@@ -7,7 +7,7 @@ export type QuestionDocument = HydratedDocument<Question>;
 @Schema({ _id: false })
 export class Question {
   @Prop({ required: true, trim: true, minlength: 1 })
-  question: string; // "Questions for exam"
+  question: string;
 
   @Prop({
     type: [String],
@@ -19,31 +19,27 @@ export class Question {
       message: 'Exam options cannot be empty strings',
     },
   })
-  exam_options: string[]; // "Options for each question"
+  exam_options: string[];
 
   @Prop({ required: true, enum: QuestionType, index: true })
-  question_type: QuestionType; // "Question type (single_choice, multiple_choice, true_false)"
+  question_type: QuestionType;
 
   @Prop({
-    type: [Number],
+    type: SchemaTypes.Mixed,
     required: true,
     validate: {
-      validator: function (val: number[]) {
-        if (this.question_type === QuestionType.SINGLE_CHOICE) {
-          return Array.isArray(val) && val.length === 1 && val.every((v) => Number.isInteger(v) && v >= 0 && v < this.exam_options.length);
-        }
-        if (this.question_type === QuestionType.MULTIPLE_CHOICE) {
-          return Array.isArray(val) && val.length === 2 && val.every((v) => Number.isInteger(v) && v >= 0 && v < this.exam_options.length);
-        }
-        if (this.question_type === QuestionType.TRUE_FALSE) {
-          return Array.isArray(val) && val.length === 1 && val.every((v) => Number.isInteger(v) && v >= 0 && v < 2);
+      validator: function (value: number | number[]) {
+        if (this.question_type === QuestionType.SINGLE_CHOICE || this.question_type === QuestionType.TRUE_FALSE) {
+          return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value < this.exam_options.length;
+        } else if (this.question_type === QuestionType.MULTIPLE_CHOICE) {
+          return Array.isArray(value) && value.length > 0 && value.every((v) => Number.isInteger(v) && v >= 0 && v < this.exam_options.length);
         }
         return false;
       },
-      message: 'Invalid correct option indexes for the specified question type or out of bounds',
+      message: 'Invalid type or value for correct_options based on question_type',
     },
   })
-  correct_options: number[]; // "Correct option indexes"
+  correct_options: number | number[];
 }
 
 export const QuestionSchema = SchemaFactory.createForClass(Question);
