@@ -72,4 +72,22 @@ export class TakeExamController {
     }
   }
 
+  @Post('submit/:examId')
+  async submitAnswer(
+    @Param('examId') examId: string,
+    @Body() body: { frontendAnswer: any; question: any },
+  ): Promise<ExamProgressDocument> {
+    try {
+      const { frontendAnswer, question } = body;
+      if (!frontendAnswer || !question) {
+        throw new HttpException('Missing answer or question data', HttpStatus.BAD_REQUEST);
+      }
+      return await this.takeExamProgressService.submitAnswer(examId, frontendAnswer, question);
+    } catch (error) {
+      throw new HttpException(
+        error.message || 'Failed to submit answer',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+  }
 }
