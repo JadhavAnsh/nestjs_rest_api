@@ -37,7 +37,7 @@ export class TakeExamController {
     return this.takeExamService.createExam(createExamDto);
   }
 
-  @Post(':examId/calculate')
+  @Post('calculate/:examId')
   async calculateProgress(
     @Param('examId') examId: string,
     @Body() body: { totalQuestions: number; correctQuestions: number },
@@ -56,8 +56,8 @@ export class TakeExamController {
     }
   }
 
-  @Get(':examId')
-  async getProgress(@Query('examId') examId: string): Promise<ExamProgressDocument | null> {
+  @Get('get/:examId')
+  async getProgress(@Param('examId') examId: string): Promise<ExamProgressDocument | null> {
     try {
       const progress = await this.takeExamProgressService.getProgress(examId);
       if (!progress) {

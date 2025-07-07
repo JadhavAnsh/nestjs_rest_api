@@ -1,10 +1,10 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document } from 'mongoose';
+import { Document, Types } from 'mongoose';
 
 @Schema({ timestamps: true })
 export class ExamProgress extends Document {
-  @Prop({ type: String, required: true }) // Changed to String to match exam_ID
-  examId: string;
+  @Prop({ type: Types.ObjectId, required: true, ref: 'Exam' })
+  examId: Types.ObjectId;
 
   @Prop({ required: true })
   total_questions: number;
