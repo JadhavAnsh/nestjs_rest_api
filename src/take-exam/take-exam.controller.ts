@@ -22,15 +22,15 @@ export class TakeExamController {
     private readonly takeExamProgressService: ExamProgressService,
   ) {}
 
-  @Get()
-  async getAllExams(): Promise<Exam[]> {
-    return this.takeExamService.getAllExams();
-  }
+  // @Get()
+  // async getAllExams(): Promise<Exam[]> {
+  //   return this.takeExamService.getAllExams();
+  // }
 
-  @Get(':id')
-  async getExamById(@Param('id') id: string): Promise<Exam> {
-    return this.takeExamService.getExamById(id);
-  }
+  // @Get(':id')
+  // async getExamById(@Param('id') id: string): Promise<Exam> {
+  //   return this.takeExamService.getExamById(id);
+  // }
 
   @Post()
   async createExam(@Body() createExamDto: CreateExamDto): Promise<Exam> {

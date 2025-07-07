@@ -1,15 +1,37 @@
-import { Transform } from 'class-transformer';
-import {
-  ArrayMaxSize,
-  ArrayMinSize,
-  IsArray,
-  IsEnum,
-  IsNotEmpty,
-  IsNumber,
-  IsString,
-  Validate,
-} from 'class-validator';
+import { IsArray, IsEnum, IsNotEmpty, IsString, Validate, ValidationArguments, ValidatorConstraint, ValidatorConstraintInterface } from 'class-validator';
 import { QuestionType } from 'src/common/enum/question-type.enum';
+
+@ValidatorConstraint({ name: 'correctOptionsValidator', async: false })
+export class CorrectOptionsValidator implements ValidatorConstraintInterface {
+  validate(value: any, args: ValidationArguments) {
+    const dto = args.object as CreateQuestionDto;
+    const { question_type, exam_options } = dto;
+
+    if (question_type === QuestionType.SINGLE_CHOICE || question_type === QuestionType.TRUE_FALSE) {
+      if (typeof value !== 'number' || !Number.isInteger(value) || value < 0 || value >= exam_options.length) {
+        return false;
+      }
+    } else if (question_type === QuestionType.MULTIPLE_CHOICE) {
+      if (!Array.isArray(value) || value.length === 0 || !value.every(v => Number.isInteger(v) && v >= 0 && v < exam_options.length)) {
+        return false;
+      }
+    } else {
+      return false;
+    }
+    return true;
+  }
+
+  defaultMessage(args: ValidationArguments) {
+    const dto = args.object as CreateQuestionDto;
+    const { question_type } = dto;
+    if (question_type === QuestionType.SINGLE_CHOICE || question_type === QuestionType.TRUE_FALSE) {
+      return 'correct_options must be an integer between 0 and exam_options.length - 1';
+    } else if (question_type === QuestionType.MULTIPLE_CHOICE) {
+      return 'correct_options must be a non-empty array of integers, each between 0 and exam_options.length - 1';
+    }
+    return 'Invalid question_type';
+  }
+}
 
 export class CreateQuestionDto {
   @IsString()
@@ -19,30 +41,12 @@ export class CreateQuestionDto {
   @IsArray()
   @IsString({ each: true })
   @IsNotEmpty({ each: true })
-  @ArrayMinSize(1)
-  @ArrayMaxSize(4)
   exam_options: string[];
 
   @IsEnum(QuestionType)
+  @IsNotEmpty()
   question_type: QuestionType;
 
-  @IsArray()
-  @IsNumber({}, { each: true })
-  @Transform(({ obj, value }) => {
-    if (!Array.isArray(value)) return undefined;
-    return value.map((v: any) => Number(v)).filter((v: number) => Number.isInteger(v));
-  })
-  @Validate((o) => {
-    if (o.question_type === QuestionType.SINGLE_CHOICE) {
-      return Array.isArray(o.correct_option_indexes) && o.correct_option_indexes.length === 1;
-    }
-    if (o.question_type === QuestionType.MULTIPLE_CHOICE) {
-      return Array.isArray(o.correct_option_indexes) && o.correct_option_indexes.length >= 2;
-    }
-    if (o.question_type === QuestionType.TRUE_FALSE) {
-      return Array.isArray(o.correct_option_indexes) && o.correct_option_indexes.length === 1 && o.correct_option_indexes.every((v: number) => v >= 0 && v < 2);
-    }
-    return false;
-  }, { message: 'Invalid correct options for the specified question type' })
-  correct_options: number[];
+  @Validate(CorrectOptionsValidator)
+  correct_options: number | number[];
 }
