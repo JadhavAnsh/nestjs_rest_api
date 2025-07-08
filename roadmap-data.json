@@ -1,0 +1,509 @@
+{
+  "_id": {
+    "$oid": "680f258d5dca7db52d1640fc"
+  },
+  "uid": "bltd249c5b7d573baf3",
+  "roadmap_title": "Basics of JavaScript",
+  "description": "A comprehensive roadmap designed to introduce young professionals to the fundamental concepts of JavaScript programming. This roadmap will guide learners through the essentials of JavaScript, preparing them for practical application in web development and other programming tasks.",
+  "skill_objectives": [
+    "Understand",
+    "Learn",
+    "Apply",
+    "Explore",
+    "Create"
+  ],
+  "total_edcoins": 280,
+  "category": "coding",
+  "course_tag": "new",
+  "total_time": 132,
+  "total_units": 9,
+  "difficulty_level": "Basic",
+  "type": "Fundamental",
+  "sub_category": "frontend",
+  "isarchive": false,
+  "logo": "https://eu-images.contentstack.com/v3/assets/bltf7ed5a6bb86457f5/bltb9bbb5ac9f194dff/6784aea7708b036e200f746f/JavaScript_basics.svg",
+  "modules": [
+    {
+      "uid": "bltd5c5275220928ea4",
+      "title": "module-1-module-6783c5c18be46",
+      "module_title": "Introduction to JavaScript",
+      "short_title": "Intro JS",
+      "description": "This module provides an overview of JavaScript, its purpose, and its relevance in web development. Learn what JavaScript is and why it is essential.",
+      "units": [
+        {
+          "uid": "blt8a68c8083fe25f49",
+          "title": "unit-1-read-6783c5be9ce22",
+          "unit_type": "read",
+          "total_edcoins": 20,
+          "total_minutes": 10,
+          "subunit": [
+            {
+              "read": {
+                "title": "Introduction to JS",
+                "link": "https://developer.mozilla.org/en-US/docs/Learn/Getting_started_with_the_web/JavaScript_basics#:~:text=JavaScript%20is%20a%20programming%20language,styling%3B%20with%20animation%2C%20etc.",
+                "edcoins": 10,
+                "time": 3
+              }
+            },
+            {
+              "read": {
+                "title": "JS Overview",
+                "link": "https://developer.mozilla.org/en-US/docs/Web/JavaScript/Language_overview#:~:text=JavaScript%20is%20a%20multi%2Dparadigm,with%20object%20prototypes%20and%20classes.",
+                "edcoins": 10,
+                "time": 7
+              }
+            }
+          ],
+          "_id": {
+            "$oid": "680f258d5dca7db52d1640fe"
+          }
+        },
+        {
+          "uid": "bltd025a94ccd162b1c",
+          "title": "unit-2-video-6783c5bfc5961",
+          "unit_type": "video",
+          "total_edcoins": 40,
+          "total_minutes": 20,
+          "subunit": [
+            {
+              "video": {
+                "title": "What is JavaScript?",
+                "link": "https://www.youtube.com/watch?v=0vL_EhRMFN0",
+                "edcoins": 20,
+                "time": 9
+              }
+            },
+            {
+              "video": {
+                "title": "Why JavaScript Matters",
+                "link": "https://www.youtube.com/watch?v=yN2yBmSHduI",
+                "edcoins": 20,
+                "time": 11
+              }
+            }
+          ],
+          "_id": {
+            "$oid": "680f258d5dca7db52d1640ff"
+          }
+        },
+        {
+          "uid": "bltb4d3546009058768",
+          "title": "unit-3-quiz-6783c5bfe1395",
+          "unit_type": "quiz",
+          "total_edcoins": 30,
+          "total_minutes": 10,
+          "subunit": [
+            {
+              "quiz": {
+                "title": "JavaScript Basics Quiz",
+                "passing_percentage": 70,
+                "questions": [
+                  {
+                    "question": "What is JavaScript primarily used for?",
+                    "correct_option": 0,
+                    "quiz_options": [
+                      "Building interactive web pages",
+                      "Creating server-side applications",
+                      "Developing desktop applications",
+                      "Database management"
+                    ]
+                  },
+                  {
+                    "question": "Which of the following is a correct way to declare a variable in JavaScript?",
+                    "correct_option": 1,
+                    "quiz_options": [
+                      "variable name = value;",
+                      "let name = value;",
+                      "value = variable name;",
+                      "const variable = value;"
+                    ]
+                  },
+                  {
+                    "question": "What is the output of the following code: console.log(typeof 'Hello');?",
+                    "correct_option": 1,
+                    "quiz_options": [
+                      "string[]",
+                      "string",
+                      "text",
+                      "object"
+                    ]
+                  },
+                  {
+                    "question": "Which symbol is used to comment a single line in JavaScript?",
+                    "correct_option": 0,
+                    "quiz_options": [
+                      "//",
+                      "#",
+                      "/*",
+                      "--"
+                    ]
+                  },
+                  {
+                    "question": "What data type is used to represent a true or false value in JavaScript?",
+                    "correct_option": 2,
+                    "quiz_options": [
+                      "String",
+                      "Number",
+                      "Boolean",
+                      "Array"
+                    ]
+                  },
+                  {
+                    "question": "Which of the following functions can be used to parse a string into an integer?",
+                    "correct_option": 1,
+                    "quiz_options": [
+                      "parseFloat()",
+                      "parseInt()",
+                      "toInteger()",
+                      "int()"
+                    ]
+                  },
+                  {
+                    "question": "Which of the following is NOT a JavaScript framework?",
+                    "correct_option": 3,
+                    "quiz_options": [
+                      "React",
+                      "Vue",
+                      "Angular",
+                      "Django"
+                    ]
+                  },
+                  {
+                    "question": "What does HTML stand for?",
+                    "correct_option": 0,
+                    "quiz_options": [
+                      "Hyper Text Markup Language",
+                      "Hypertext Markdown Language",
+                      "Hightext Markup Language",
+                      "Hyper Text Management Language"
+                    ]
+                  },
+                  {
+                    "question": "In JavaScript, which operator is used to assign a value to a variable?",
+                    "correct_option": 0,
+                    "quiz_options": [
+                      "=",
+                      "==",
+                      "===",
+                      "=>"
+                    ]
+                  },
+                  {
+                    "question": "Which built-in method is used to return the length of a string in JavaScript?",
+                    "correct_option": 0,
+                    "quiz_options": [
+                      "length",
+                      "size",
+                      "getLength",
+                      "count"
+                    ]
+                  }
+                ]
+              }
+            }
+          ],
+          "_id": {
+            "$oid": "680f258d5dca7db52d164100"
+          }
+        }
+      ],
+      "_id": {
+        "$oid": "680f258d5dca7db52d1640fd"
+      }
+    },
+    {
+      "uid": "bltdad3d7db827a3c74",
+      "title": "module-2-module-6783c5c4960a1",
+      "module_title": "JavaScript Basics",
+      "short_title": "JS Basics",
+      "description": "Dive into the fundamental syntax and structure of JavaScript, exploring variables, data types, and functions. Understand how to write simple code effectively.",
+      "units": [
+        {
+          "uid": "blt5af9fd13d0e9b729",
+          "title": "unit-1-read-6783c5bed20dd",
+          "unit_type": "read",
+          "total_edcoins": 20,
+          "total_minutes": 12,
+          "subunit": [
+            {
+              "read": {
+                "title": "JS Syntax Guide",
+                "link": "https://www.w3schools.com/js/js_syntax.asp",
+                "edcoins": 10,
+                "time": 5
+              }
+            },
+            {
+              "read": {
+                "title": "Understanding Variables",
+                "link": "https://www.digitalocean.com/community/tutorials/understanding-variables-scope-hoisting-in-javascript#:~:text=A%20variable%20is%20a%20named,number%2C%20string%2C%20or%20object.",
+                "edcoins": 10,
+                "time": 7
+              }
+            }
+          ],
+          "_id": {
+            "$oid": "680f258d5dca7db52d164102"
+          }
+        },
+        {
+          "uid": "bltfbfa2fd024984b1d",
+          "title": "unit-2-video-6783c5bf90c14",
+          "unit_type": "video",
+          "total_edcoins": 40,
+          "total_minutes": 28,
+          "subunit": [
+            {
+              "video": {
+                "title": "Basics of JS Functions",
+                "link": "https://www.youtube.com/watch?v=a_gwOwkbhZ0",
+                "edcoins": 20,
+                "time": 14
+              }
+            },
+            {
+              "video": {
+                "title": "Variables in JS",
+                "link": "https://www.youtube.com/watch?v=Q4p8vRQX8uY",
+                "edcoins": 20,
+                "time": 14
+              }
+            }
+          ],
+          "_id": {
+            "$oid": "680f258d5dca7db52d164103"
+          }
+        },
+        {
+          "uid": "blt96739ef096fcdd03",
+          "title": "unit-3-quiz-6783c5bf291a4",
+          "unit_type": "quiz",
+          "total_edcoins": 30,
+          "total_minutes": 10,
+          "subunit": [
+            {
+              "quiz": {
+                "title": "JavaScript Basics Quiz",
+                "passing_percentage": 70,
+                "questions": [
+                  {
+                    "question": "What is a variable in JavaScript?",
+                    "correct_option": 0,
+                    "quiz_options": [
+                      "A named storage for data",
+                      "A function that executes code",
+                      "A type of data structure",
+                      "A JavaScript method"
+                    ]
+                  },
+                  {
+                    "question": "Which of the following is NOT a data type in JavaScript?",
+                    "correct_option": 3,
+                    "quiz_options": [
+                      "String",
+                      "Number",
+                      "Boolean",
+                      "Character"
+                    ]
+                  },
+                  {
+                    "question": "How do you declare a variable in JavaScript?",
+                    "correct_option": 0,
+                    "quiz_options": [
+                      "Using the var, let, or const keywords",
+                      "Using the declare keyword",
+                      "Using the define keyword",
+                      "By simply assigning a value to a name"
+                    ]
+                  },
+                  {
+                    "question": "What symbol is used to denote comments in JavaScript?",
+                    "correct_option": 0,
+                    "quiz_options": [
+                      "//",
+                      "/*",
+                      "#",
+                      "<!--"
+                    ]
+                  },
+                  {
+                    "question": "Which of the following is an example of a function declaration in JavaScript?",
+                    "correct_option": 1,
+                    "quiz_options": [
+                      "function: myFunction() {}",
+                      "function myFunction() {}",
+                      "declare function myFunction {}",
+                      "myFunction() function {}"
+                    ]
+                  },
+                  {
+                    "question": "What is the purpose of the 'return' statement in a function?",
+                    "correct_option": 2,
+                    "quiz_options": [
+                      "To stop the function execution",
+                      "To display output on screen",
+                      "To return a value from the function",
+                      "To create a new variable"
+                    ]
+                  },
+                  {
+                    "question": "Which data type can hold multiple values in JavaScript?",
+                    "correct_option": 1,
+                    "quiz_options": [
+                      "Number",
+                      "Array",
+                      "Boolean",
+                      "String"
+                    ]
+                  },
+                  {
+                    "question": "What will be the output of the following code: console.log(typeof 'Hello');",
+                    "correct_option": 0,
+                    "quiz_options": [
+                      "string",
+                      "undefined",
+                      "object",
+                      "number"
+                    ]
+                  },
+                  {
+                    "question": "Which of the following is a correct way to write an arrow function?",
+                    "correct_option": 3,
+                    "quiz_options": [
+                      "const myFunc = function() => {}",
+                      "const myFunc = => {}",
+                      "const myFunc = () => () => {}",
+                      "const myFunc = () => {}"
+                    ]
+                  },
+                  {
+                    "question": "When is a variable hoisted in JavaScript?",
+                    "correct_option": 0,
+                    "quiz_options": [
+                      "When it is defined after it is called",
+                      "When it is declared at the top of the code",
+                      "When it is initialized with a value",
+                      "Hoisting does not happen in JavaScript"
+                    ]
+                  }
+                ]
+              }
+            }
+          ],
+          "_id": {
+            "$oid": "680f258d5dca7db52d164104"
+          }
+        }
+      ],
+      "_id": {
+        "$oid": "680f258d5dca7db52d164101"
+      }
+    },
+    {
+      "uid": "bltef795b3e3b497d30",
+      "title": "module-3-module-6783c5c4765b7",
+      "module_title": "Intermediate JavaScript",
+      "short_title": "Intermediate JS",
+      "description": "Enhance your skills by learning about control structures, events, and manipulating the DOM. Discover how to create dynamic web experiences using JavaScript.",
+      "units": [
+        {
+          "uid": "blte3ec7e66cd2a7b77",
+          "title": "unit-1-read-6783c5be1c141",
+          "unit_type": "read",
+          "total_edcoins": 20,
+          "total_minutes": 8,
+          "subunit": [
+            {
+              "read": {
+                "title": "Control Structures in JS",
+                "link": "https://www.javascriptinstitute.org/javascript-tutorial/control-structures/",
+                "edcoins": 10,
+                "time": 5
+              }
+            },
+            {
+              "read": {
+                "title": "Events and DOM",
+                "link": "https://www.geeksforgeeks.org/how-to-use-dom-and-events/#:~:text=To%20provide%20a%20dynamic%20interface,external%20script%20(JavaScript%20file).",
+                "edcoins": 10,
+                "time": 3
+              }
+            }
+          ],
+          "_id": {
+            "$oid": "680f258d5dca7db52d164106"
+          }
+        },
+        {
+          "uid": "blt7cd2c8ab2166f0cb",
+          "title": "unit-2-video-6783c5bfd617c",
+          "unit_type": "video",
+          "total_edcoins": 40,
+          "total_minutes": 34,
+          "subunit": [
+            {
+              "video": {
+                "title": "DOM Manipulation Basics",
+                "link": "https://www.youtube.com/watch?v=y17RuWkWdn8",
+                "edcoins": 20,
+                "time": 19
+              }
+            },
+            {
+              "video": {
+                "title": "JS Events Explained",
+                "link": "https://www.youtube.com/watch?v=YiOlaiscqDY",
+                "edcoins": 20,
+                "time": 15
+              }
+            }
+          ],
+          "_id": {
+            "$oid": "680f258d5dca7db52d164107"
+          }
+        },
+        {
+          "uid": "bltdfa86b6fc4dd213b",
+          "title": "unit-3-task-6783c5bfced21",
+          "unit_type": "task",
+          "total_edcoins": 40,
+          "total_minutes": 0,
+          "subunit": [
+            {
+              "task": {
+                "title": "JavaScript Essentials",
+                "rubric": "Complete a hands-on assignment where you will write a simple JavaScript program that demonstrates your understanding of variables, functions, and DOM manipulation. Your task is to create a basic web page that allows users to enter their name and displays a personalized greeting when they click a button. Use JavaScript to handle the button click event and to manipulate the DOM to display the greeting. You should include comments in your code to explain what each part does.",
+                "tasks": [
+                  {
+                    "title": "JavaScript Essentials",
+                    "input_type": "URL"
+                  }
+                ],
+                "edcoins": 40,
+                "time": 0
+              }
+            }
+          ],
+          "_id": {
+            "$oid": "680f258d5dca7db52d164108"
+          }
+        }
+      ],
+      "_id": {
+        "$oid": "680f258d5dca7db52d164105"
+      }
+    }
+  ],
+  "related_roadmaps": [
+    "blt9ac1d808619486e0",
+    "bltc1b64441565532de"
+  ],
+  "is_published": true,
+  "__v": 0,
+  "createdAt": {
+    "$date": "2025-04-28T06:51:57.688Z"
+  },
+  "updatedAt": {
+    "$date": "2025-04-28T06:51:57.688Z"
+  }
+}
