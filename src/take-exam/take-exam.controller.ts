@@ -11,6 +11,7 @@ import {
   Query
 } from '@nestjs/common';
 import { CreateExamDto } from './dto/create-exam.dto';
+import { ExamProgressDocument } from './schema/exam-progress.schema';
 import { Exam } from './schema/exam.schema';
 import { TakeExamService } from './take-exam.service';
 import { ExamProgressService } from './take-examProgress.service';
