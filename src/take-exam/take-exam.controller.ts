@@ -62,7 +62,7 @@ export class TakeExamController {
     }
   }
 
-  @Post('submit/:examId')
+ @Post('submit/:examId')
 async submitAnswer(
   @Param('examId') examId: string,
   @Body() body: { frontendAnswer: any; question: any },
@@ -79,9 +79,21 @@ async submitAnswer(
     };
 
     const exam = await this.takeExamService.findExamById(examId);
-    console.log('Fetched exam:', JSON.stringify(exam, null, 2));
-    if (!exam || !exam.exam_questions || !Array.isArray(exam.exam_questions) || !exam.exam_questions.length) {
-      throw new HttpException('Exam or questions not found', HttpStatus.NOT_FOUND);
+    if (!exam) {
+      console.error(`Exam not found for examId: ${examId}`);
+      throw new HttpException('Exam not found', HttpStatus.NOT_FOUND);
+    }
+    if (!exam.exam_questions) {
+      console.error(`Exam questions not defined for examId: ${examId}`);
+      throw new HttpException('Exam questions not found', HttpStatus.NOT_FOUND);
+    }
+    if (!Array.isArray(exam.exam_questions)) {
+      console.error(`Exam questions is not an array for examId: ${examId}`);
+      throw new HttpException('Invalid exam questions format', HttpStatus.NOT_FOUND);
+    }
+    if (!exam.exam_questions.length) {
+      console.error(`No questions available for examId: ${examId}`);
+      throw new HttpException('No questions available for this exam', HttpStatus.NOT_FOUND);
     }
 
     const backendQuestions: IQuestion[] = exam.exam_questions.map((q: any) => ({
@@ -92,11 +104,6 @@ async submitAnswer(
       points: 1,
     }));
 
-    console.log('Backend questions:', JSON.stringify(backendQuestions, null, 2));
-    if (!backendQuestions.length) {
-      throw new HttpException('No questions available for this exam', HttpStatus.NOT_FOUND);
-    }
-
     return await this.takeExamProgressService.submitAnswer(examId, frontendQuestion, backendQuestions);
   } catch (error) {
     console.error('Error in submitAnswer:', error);
@@ -106,4 +113,5 @@ async submitAnswer(
     );
   }
 }
+
 }
