@@ -35,6 +35,26 @@ export class ExamProgress extends Document {
     default: [],
   })
   attempt_Log: { percentage: number; timestamp: Date }[];
+
+  @Prop({
+    type: [{
+      questionId: { type: Types.ObjectId, required: true, ref: 'Question' }, // Ref to question
+      selectedAnswer: { type: String, required: true }, // Answer selected by user
+      correctAnswer: { type: String, required: true }, // Correct answer (from DB)
+      isCorrect: { type: Boolean, required: true }, // Whether answer is correct
+      timeTaken: { type: Number, default: 0 }, // Time taken to answer (optional)
+      timestamp: { type: Date, default: Date.now }, // When the answer was submitted
+    }],
+    default: [],
+  })
+  answerLog: {
+    questionId: Types.ObjectId;
+    selectedAnswer: string;
+    correctAnswer: string;
+    isCorrect: boolean;
+    timeTaken?: number;
+    timestamp: Date;
+  }[]; // Stores logs of every answered question
 }
 
 export type ExamProgressDocument = ExamProgress & Document;

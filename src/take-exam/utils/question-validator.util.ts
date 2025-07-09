@@ -1,41 +1,61 @@
 import { NotFoundException, BadRequestException } from '@nestjs/common';
 
-// Define the Backend Question interface (authoritative, with correct answers)
+// Backend Question interface (authoritative, with correct answers)
 export interface IQuestion {
   question: string;
   exam_options?: string[];
   question_type: 'single_choice' | 'multi_choice' | 'true_false';
-  correct_options: string | string[] | boolean;
-  points?: number; // Optional: for flexible scoring
+  correct_options: number | number[] | boolean;
+  points?: number;
 }
 
-// Define the Frontend Question interface (includes submitted answer)
+// Frontend Question interface (includes submitted answer)
 export interface IFrontendQuestion {
   question: string;
   exam_options?: string[];
   question_type: 'single_choice' | 'multi_choice' | 'true_false';
-  answer: string | string[] | boolean; // User's submitted answer
+  answer: string | string[] | boolean;
 }
 
 // Validation function
-export function validateAnswer(
+export async function validateAnswer(
   frontendQuestion: IFrontendQuestion,
-  backendQuestions: IQuestion[], // Array of backend questions to find the matching one
+  backendQuestions: IQuestion[],
   currentScore: number = 0,
-): { isCorrect: boolean; message?: string; updatedScore: number } {
+): Promise<{ isCorrect: boolean; message?: string; updatedScore: number }> {
   // Validate frontend input
-  if (!frontendQuestion || !frontendQuestion.question || !frontendQuestion.question_type) {
+  if (!frontendQuestion?.question || !frontendQuestion?.question_type) {
     throw new BadRequestException('Invalid or missing question data from frontend');
   }
   if (frontendQuestion.answer === undefined || frontendQuestion.answer === null) {
     throw new BadRequestException('Invalid or missing answer data from frontend');
   }
 
-  // Find matching backend question by question text
-  const backendQuestion = backendQuestions.find(
-    (q) => q.question === frontendQuestion.question,
+  // Normalize text to handle whitespace, multiple spaces, and special characters
+  const normalizeText = (text: string) =>
+    text
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, ' ') // Normalize multiple spaces to single space
+      .replace(/[\u200B-\u200D\uFEFF]/g, ''); // Remove zero-width spaces and other invisible characters
+
+  // Log normalized frontend question text
+  console.log('Normalized frontend question:', normalizeText(frontendQuestion.question));
+  // Log normalized backend questions for debugging
+  console.log(
+    'Normalized backend questions:',
+    backendQuestions.map((q) => normalizeText(q.question)),
   );
+
+  // Find matching backend question by normalized question text
+  const backendQuestion = backendQuestions.find(
+    (q) => normalizeText(q.question) === normalizeText(frontendQuestion.question),
+  );
+
+  // If no match is found, log detailed mismatch info
   if (!backendQuestion) {
+    console.log('Frontend question (raw):', frontendQuestion.question);
+    console.log('Backend questions (raw):', backendQuestions.map((q) => q.question));
     throw new NotFoundException('No matching question found in backend data');
   }
 
@@ -44,12 +64,9 @@ export function validateAnswer(
     throw new BadRequestException('Question type mismatch between frontend and backend');
   }
 
-  // Validate exam_options consistency (if provided)
+  // Validate exam_options consistency
   if (frontendQuestion.exam_options && backendQuestion.exam_options) {
-    if (
-      frontendQuestion.exam_options.sort().join() !==
-      backendQuestion.exam_options.sort().join()
-    ) {
+    if (frontendQuestion.exam_options.sort().join() !== backendQuestion.exam_options.sort().join()) {
       throw new BadRequestException('Answer options mismatch between frontend and backend');
     }
   } else if (
@@ -68,12 +85,17 @@ export function validateAnswer(
       if (typeof submittedAnswer !== 'string') {
         throw new BadRequestException('Single choice answer must be a string');
       }
-      if (typeof backendQuestion.correct_options !== 'string' && !Array.isArray(backendQuestion.correct_options)) {
+      if (typeof backendQuestion.correct_options !== 'number') {
         throw new BadRequestException('Invalid correct options for single choice');
       }
-      isCorrect = typeof backendQuestion.correct_options === 'string'
-        ? backendQuestion.correct_options === submittedAnswer
-        : backendQuestion.correct_options[0] === submittedAnswer;
+      // Ensure exam_options exists and the correct_options index is valid
+      if (
+        !backendQuestion.exam_options ||
+        backendQuestion.correct_options >= backendQuestion.exam_options.length
+      ) {
+        throw new BadRequestException('Invalid exam options or correct options index for single choice');
+      }
+      isCorrect = backendQuestion.exam_options[backendQuestion.correct_options] === submittedAnswer;
       scoreIncrement = isCorrect ? (backendQuestion.points || 1) : 0;
       break;
 
@@ -84,7 +106,21 @@ export function validateAnswer(
       if (!Array.isArray(backendQuestion.correct_options) || backendQuestion.correct_options.length === 0) {
         throw new BadRequestException('Invalid correct options for multi-choice');
       }
-      isCorrect = submittedAnswer.sort().join() === backendQuestion.correct_options.sort().join();
+      // Ensure exam_options exists and all correct_options indices are valid
+      if (
+        !backendQuestion.exam_options ||
+        backendQuestion.correct_options.some(
+          (index) => index >= backendQuestion.exam_options!.length,
+        )
+      ) {
+        throw new BadRequestException('Invalid exam options or correct options indices for multi-choice');
+      }
+      isCorrect =
+        submittedAnswer.sort().join() ===
+        backendQuestion.correct_options
+          .map((index) => backendQuestion.exam_options![index])
+          .sort()
+          .join();
       scoreIncrement = isCorrect ? (backendQuestion.points || 1) : 0;
       break;
 
@@ -100,7 +136,7 @@ export function validateAnswer(
       break;
 
     default:
-      throw new NotFoundException('Invalid question type');
+      throw new BadRequestException('Invalid question type');
   }
 
   return {

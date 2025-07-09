@@ -15,11 +15,34 @@ export class TakeExamService {
     @InjectModel(Exam.name) private readonly examModel: Model<Exam>,
   ) {}
 
+  async findExamById(examId: string): Promise<Exam> {
+    try {
+      const isObjectId = /^[0-9a-fA-F]{24}$/.test(examId);
+      let exam;
+      if (isObjectId) {
+        exam = await this.examModel.findById(examId).exec();
+      } else {
+        exam = await this.examModel.findOne({ exam_ID: examId }).exec();
+      }
+      console.log('Full exam data:', JSON.stringify(exam, null, 2));
+      if (!exam) {
+        throw new NotFoundException(`Exam with ID ${examId} not found`);
+      }
+      return exam;
+    } catch (error) {
+      console.error('Error in findExamById:', error);
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Failed to retrieve exam');
+    }
+  }
+
   async getExamByRoadmapId(roadmapId: string): Promise<Exam> {
     try {
       const exams = await this.examModel.aggregate([
         { $match: { roadmap_ID: roadmapId } },
-        { $unwind: '$exam_questions' },
+        { $unwind: '$Questions' },
         { $sample: { size: 25 } },
         {
           $group: {
@@ -32,7 +55,7 @@ export class TakeExamService {
             exam_time: { $first: '$exam_time' },
             exam_levels: { $first: '$exam_levels' },
             tags: { $first: '$tags' },
-            exam_questions: { $push: '$exam_questions' },
+            Questions: { $push: '$Questions' },
           },
         },
       ]);
@@ -54,7 +77,6 @@ export class TakeExamService {
 
   async createExam(createExamDto: CreateExamDto): Promise<Exam> {
     try {
-      // Check if exam_ID already exists
       const existingExam = await this.examModel
         .findOne({ exam_ID: createExamDto.exam_ID })
         .exec();
@@ -64,10 +86,9 @@ export class TakeExamService {
         );
       }
 
-      // Create new exam instance
       const exam = new this.examModel({
         ...createExamDto,
-        exam_questions: createExamDto.exam_questions.map((question) => ({
+        Questions: createExamDto.exam_questions.map((question) => ({
           question: question.question,
           exam_options: question.exam_options,
           question_type: question.question_type,
@@ -75,7 +96,6 @@ export class TakeExamService {
         })),
       });
 
-      // Save to database
       const savedExam = await exam.save();
       return savedExam;
     } catch (error) {
