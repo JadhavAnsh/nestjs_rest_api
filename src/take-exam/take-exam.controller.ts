@@ -30,8 +30,6 @@ interface RoadmapData {
     }[];
   }[];
 }
-import { ExamProgressDocument } from './schema/exam-progress.schema';
-import { IFrontendQuestion, IQuestion } from './utils/question-validator.util';
 
 @Controller('take-exam')
 export class TakeExamController {
