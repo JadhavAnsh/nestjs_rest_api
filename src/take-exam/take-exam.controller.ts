@@ -118,7 +118,7 @@ export class TakeExamController {
     }
   }
 
-  @Post(':examId/calculate')
+  @Post('calculate/:examId')
   async calculateProgress(
     @Param('examId') examId: string,
     @Body() body: { totalQuestions: number; correctQuestions: number },
@@ -145,7 +145,7 @@ export class TakeExamController {
     }
   }
 
-  @Get(':examId')
+  @Get('get/:examId')
   async getProgress(
     @Query('examId') examId: string,
   ): Promise<ExamProgressDocument | null> {

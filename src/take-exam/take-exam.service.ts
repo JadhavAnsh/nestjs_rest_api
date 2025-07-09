@@ -51,7 +51,7 @@ export class TakeExamService {
     }
     this.genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
   }
-
+//for getting the exam Data , to submit the 
   async findExamById(examId: string): Promise<Exam> {
     try {
       const isObjectId = /^[0-9a-fA-F]{24}$/.test(examId);
