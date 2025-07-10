@@ -120,9 +120,11 @@ export class ExamProgressService {
       });
     } else {
       progress.total_questions = backendQuestions.length;
+      // Clear answerLog to ensure latest attempt answers only
+      progress.answerLog = [];
     }
 
-    let currentScore = progress.correct_questions || 0;
+    let currentScore = 0; // Reset currentScore for latest attempt
 
     // Process each answer in the payload
     for (const frontendAnswer of frontendPayload.quiz_answers) {

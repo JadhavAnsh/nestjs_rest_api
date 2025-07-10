@@ -8,7 +8,7 @@ import {
   NotFoundException,
   Param,
   Post,
-  Query, 
+  Query,
 } from '@nestjs/common';
 import { CreateExamDto } from './dto/create-exam.dto';
 import { ExamProgressDocument } from './schema/exam-progress.schema';
@@ -169,13 +169,15 @@ export class TakeExamController {
     @Body() body: { quiz_answers: { question: string; answer: string | string[] | boolean }[] },
   ): Promise<ExamProgressDocument> {
     try {
-      // Validate payload structure
-      if (!body.quiz_answers || !Array.isArray(body.quiz_answers) || body.quiz_answers.length === 0) {
+      const { quiz_answers } = body;
+
+      // Validate quiz_answers
+      if (!quiz_answers || !Array.isArray(quiz_answers) || quiz_answers.length === 0) {
         throw new HttpException('Invalid or missing quiz_answers data', HttpStatus.BAD_REQUEST);
       }
 
       // Validate each answer entry
-      for (const answer of body.quiz_answers) {
+      for (const answer of quiz_answers) {
         if (!answer.question || answer.answer === undefined || answer.answer === null) {
           throw new HttpException(
             'Missing or invalid question/answer data in quiz_answers',
@@ -191,37 +193,54 @@ export class TakeExamController {
         throw new HttpException('Exam not found', HttpStatus.NOT_FOUND);
       }
 
-      // Combine questions from all rounds
-      const backendQuestions: IQuestion[] = [
-        ...(exam.round_1 || []).map((q: any) => ({
+      // Prepare rounds questions map
+      const roundsMap: { [key: string]: IQuestion[] } = {
+        round_1: (exam.round_1 || []).map((q: any) => ({
           question: q.question,
           exam_options: q.exam_options,
           question_type: q.question_type,
           correct_options: q.correct_options,
           points: 1,
         })),
-        ...(exam.round_2 || []).map((q: any) => ({
+        round_2: (exam.round_2 || []).map((q: any) => ({
           question: q.question,
           exam_options: q.exam_options,
           question_type: q.question_type,
           correct_options: q.correct_options,
           points: 1,
         })),
-        ...(exam.round_3 || []).map((q: any) => ({
+        round_3: (exam.round_3 || []).map((q: any) => ({
           question: q.question,
           exam_options: q.exam_options,
           question_type: q.question_type,
           correct_options: q.correct_options,
           points: 1,
         })),
-      ];
+      };
 
-      if (!backendQuestions.length) {
-        console.error(`No questions available for examId: ${examId}`);
-        throw new HttpException('No questions available for this exam', HttpStatus.NOT_FOUND);
+      // Find which round the frontend answers belong to
+      let matchedRound = '';
+      let matchedBackendQuestions: IQuestion[] = [];
+      let maxMatchCount = 0;
+      for (const [round, questions] of Object.entries(roundsMap)) {
+        const questionSet = new Set(questions.map((q) => q.question));
+        const matchCount = quiz_answers.filter((answer) => questionSet.has(answer.question)).length;
+        if (matchCount > maxMatchCount) {
+          maxMatchCount = matchCount;
+          matchedRound = round;
+          matchedBackendQuestions = questions;
+        }
       }
 
-      return await this.takeExamProgressService.submitAnswer(examId, body, backendQuestions);
+      if (!matchedRound || maxMatchCount === 0) {
+        throw new HttpException('No matching round found for the provided answers', HttpStatus.BAD_REQUEST);
+      }
+
+      // Prepare frontend payload for the matched round
+      const frontendPayload = { quiz_answers };
+
+      // Call submitAnswer for the matched round
+      return await this.takeExamProgressService.submitAnswer(examId, frontendPayload, matchedBackendQuestions);
     } catch (error) {
       console.error('Error in submitAnswer:', error);
       throw new HttpException(
@@ -230,5 +249,4 @@ export class TakeExamController {
       );
     }
   }
-
 }
