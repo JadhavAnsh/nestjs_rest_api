@@ -163,56 +163,72 @@ export class TakeExamController {
     }
   }
 
- @Post('submit/:examId')
-async submitAnswer(
-  @Param('examId') examId: string,
-  @Body() body: { frontendAnswer: any; question: any },
-): Promise<ExamProgressDocument> {
-  try {
-    const { frontendAnswer, question } = body;
-    if (!frontendAnswer || !question || !question.question || !question.question_type) {
-      throw new HttpException('Missing or invalid answer/question data', HttpStatus.BAD_REQUEST);
-    }
+  @Post('submit/:examId')
+  async submitAnswer(
+    @Param('examId') examId: string,
+    @Body() body: { quiz_answers: { question: string; answer: string | string[] | boolean }[] },
+  ): Promise<ExamProgressDocument> {
+    try {
+      // Validate payload structure
+      if (!body.quiz_answers || !Array.isArray(body.quiz_answers) || body.quiz_answers.length === 0) {
+        throw new HttpException('Invalid or missing quiz_answers data', HttpStatus.BAD_REQUEST);
+      }
 
-    const frontendQuestion: IFrontendQuestion = {
-      ...question,
-      answer: frontendAnswer,
-    };
+      // Validate each answer entry
+      for (const answer of body.quiz_answers) {
+        if (!answer.question || answer.answer === undefined || answer.answer === null) {
+          throw new HttpException(
+            'Missing or invalid question/answer data in quiz_answers',
+            HttpStatus.BAD_REQUEST,
+          );
+        }
+      }
 
-    const exam = await this.takeExamService.findExamById(examId);
-    if (!exam) {
-      console.error(`Exam not found for examId: ${examId}`);
-      throw new HttpException('Exam not found', HttpStatus.NOT_FOUND);
-    }
-    if (!exam.round_1) {
-      console.error(`Exam questions not defined for examId: ${examId}`);
-      throw new HttpException('Exam questions not found', HttpStatus.NOT_FOUND);
-    }
-    if (!Array.isArray(exam.round_1)) {
-      console.error(`Exam questions is not an array for examId: ${examId}`);
-      throw new HttpException('Invalid exam questions format', HttpStatus.NOT_FOUND);
-    }
-    if (!exam.round_1.length) {
-      console.error(`No questions available for examId: ${examId}`);
-      throw new HttpException('No questions available for this exam', HttpStatus.NOT_FOUND);
-    }
+      // Fetch exam data
+      const exam = await this.takeExamService.findExamById(examId);
+      if (!exam) {
+        console.error(`Exam not found for examId: ${examId}`);
+        throw new HttpException('Exam not found', HttpStatus.NOT_FOUND);
+      }
 
-    const backendQuestions: IQuestion[] = exam.round_1.map((q: any) => ({
-      question: q.question,
-      exam_options: q.exam_options,
-      question_type: q.question_type,
-      correct_options: q.correct_options,
-      points: 1,
-    }));
+      // Combine questions from all rounds
+      const backendQuestions: IQuestion[] = [
+        ...(exam.round_1 || []).map((q: any) => ({
+          question: q.question,
+          exam_options: q.exam_options,
+          question_type: q.question_type,
+          correct_options: q.correct_options,
+          points: 1,
+        })),
+        ...(exam.round_2 || []).map((q: any) => ({
+          question: q.question,
+          exam_options: q.exam_options,
+          question_type: q.question_type,
+          correct_options: q.correct_options,
+          points: 1,
+        })),
+        ...(exam.round_3 || []).map((q: any) => ({
+          question: q.question,
+          exam_options: q.exam_options,
+          question_type: q.question_type,
+          correct_options: q.correct_options,
+          points: 1,
+        })),
+      ];
 
-    return await this.takeExamProgressService.submitAnswer(examId, frontendQuestion, backendQuestions);
-  } catch (error) {
-    console.error('Error in submitAnswer:', error);
-    throw new HttpException(
-      error.message || 'Failed to submit answer',
-      HttpStatus.BAD_REQUEST,
-    );
+      if (!backendQuestions.length) {
+        console.error(`No questions available for examId: ${examId}`);
+        throw new HttpException('No questions available for this exam', HttpStatus.NOT_FOUND);
+      }
+
+      return await this.takeExamProgressService.submitAnswer(examId, body, backendQuestions);
+    } catch (error) {
+      console.error('Error in submitAnswer:', error);
+      throw new HttpException(
+        error.message || 'Failed to submit answer',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
   }
-}
 
 }

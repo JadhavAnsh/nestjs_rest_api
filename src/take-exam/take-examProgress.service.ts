@@ -82,107 +82,136 @@ export class ExamProgressService {
     return await this.examProgressModel.findOne({ examId }).exec();
   }
 
-  async submitAnswer(
-    examId: string,
-    frontendQuestion: IFrontendQuestion,
-    backendQuestions: IQuestion[],
-  ): Promise<ExamProgressDocument> {
-    try {
-      // Log frontend question and answer
-      console.log('Frontend question:', JSON.stringify(frontendQuestion, null, 2));
-      // Log all backend questions
-      console.log('Backend questions:', JSON.stringify(backendQuestions, null, 2));
+  
+  async  submitAnswer(
+  this: any,
+  examId: string,
+  frontendPayload: { quiz_answers: { question: string; answer: string | string[] | boolean }[] },
+  backendQuestions: IQuestion[],
+): Promise<ExamProgressDocument> {
+  try {
+    // Validate payload structure
+    if (!frontendPayload.quiz_answers || !Array.isArray(frontendPayload.quiz_answers)) {
+      throw new BadRequestException('Invalid payload: quiz_answers must be an array');
+    }
 
-      // Validate the answer
-      const { isCorrect } = await validateAnswer(frontendQuestion, backendQuestions, 0);
+    // Log frontend payload and backend questions
+    console.log('Frontend payload:', JSON.stringify(frontendPayload, null, 2));
+    console.log('Backend questions:', JSON.stringify(backendQuestions, null, 2));
 
-      const backendQuestion = backendQuestions.find(
-        (q) => q.question === frontendQuestion.question,
-      );
+    // Validate backendQuestions length
+    if (backendQuestions.length <= 0) {
+      throw new BadRequestException('Invalid input: backendQuestions must contain at least one question');
+    }
+
+    // Initialize or fetch progress
+    let progress = await this.examProgressModel.findOne({ examId }).exec();
+    if (!progress) {
+      progress = new this.examProgressModel({
+        examId,
+        total_questions: backendQuestions.length,
+        correct_questions: 0,
+        has_started: true,
+        attempts: 1,
+        highest_percentage: 0,
+        attempt_Log: [],
+        lockUntil: null,
+        answerLog: [],
+      });
+    } else {
+      progress.total_questions = backendQuestions.length;
+    }
+
+    let currentScore = progress.correct_questions || 0;
+
+    // Process each answer in the payload
+    for (const frontendAnswer of frontendPayload.quiz_answers) {
+      const backendQuestion = backendQuestions.find((q) => q.question === frontendAnswer.question);
       if (!backendQuestion) {
-        throw new NotFoundException('No matching question found in backend data');
+        throw new NotFoundException(`No matching question found for "${frontendAnswer.question}"`);
       }
 
+      // Prepare frontend question for validation
+      const frontendQuestion: IFrontendQuestion = {
+        question: frontendAnswer.question,
+        question_type: backendQuestion.question_type,
+        answer: frontendAnswer.answer,
+        exam_options: backendQuestion.exam_options,
+      };
+
+      // Validate answer
+      const { isCorrect, updatedScore } = await validateAnswer(
+        frontendQuestion,
+        backendQuestions,
+        currentScore,
+      );
+
+      currentScore = updatedScore  
+
       // Convert answers to strings for answerLog
-      const selectedAnswer = Array.isArray(frontendQuestion.answer)
-        ? frontendQuestion.answer.join(', ')
-        : frontendQuestion.answer.toString();
+      const selectedAnswer = Array.isArray(frontendAnswer.answer)
+        ? frontendAnswer.answer.join(', ')
+        : frontendAnswer.answer.toString();
 
       let correctAnswer: string;
       if (backendQuestion.question_type === 'true_false') {
-        if (typeof backendQuestion.correct_options !== 'number' || !backendQuestion.exam_options) {
-          throw new BadRequestException('Invalid correct_options or exam_options for true_false');
-        }
-        correctAnswer = backendQuestion.exam_options[backendQuestion.correct_options];
+        correctAnswer = (backendQuestion.correct_options === 0 ? true : false).toString();
       } else if (backendQuestion.question_type === 'single_choice') {
-        if (typeof backendQuestion.correct_options !== 'number' || !backendQuestion.exam_options) {
-          throw new BadRequestException('Invalid correct_options or exam_options for single_choice');
+        if (!backendQuestion.exam_options) {
+          throw new BadRequestException('Invalid exam_options for single_choice');
         }
-        correctAnswer = backendQuestion.exam_options[backendQuestion.correct_options];
+        correctAnswer = backendQuestion.exam_options[backendQuestion.correct_options as number];
       } else if (backendQuestion.question_type === 'multi_choice') {
-        if (!Array.isArray(backendQuestion.correct_options) || !backendQuestion.exam_options) {
-          throw new BadRequestException('Invalid correct_options or exam_options for multi_choice');
+        if (!backendQuestion.exam_options) {
+          throw new BadRequestException('Invalid exam_options for multi_choice');
         }
-        // Validate that all correct_options indices are valid
-        if (
-          backendQuestion.correct_options.some(
-            (index) => !backendQuestion.exam_options || index < 0 || index >= backendQuestion.exam_options.length,
-          )
-        ) {
-          throw new BadRequestException('Invalid correct_options indices for multi_choice');
-        }
-        correctAnswer = backendQuestion.correct_options
+        correctAnswer = (backendQuestion.correct_options as number[])
           .map((index) => backendQuestion.exam_options![index])
           .join(', ');
       } else {
         throw new BadRequestException(`Invalid question type: ${backendQuestion.question_type}`);
       }
 
-      // Log selected and correct answers
+      // Log answers
       console.log('Selected answer:', selectedAnswer);
       console.log('Correct answer:', correctAnswer);
       console.log('Is correct:', isCorrect);
 
-      // Initialize or update progress
-      let progress = await this.examProgressModel.findOne({ examId }).exec();
-      if (!progress) {
-        progress = new this.examProgressModel({
-          examId,
-          total_questions: backendQuestions.length,
-          correct_questions: isCorrect ? 1 : 0,
-          has_started: true,
-          attempts: 1,
-          highest_percentage: 0,
-          attempt_Log: [],
-          lockUntil: null,
-          answerLog: [],
-        });
-      } else {
-        progress.correct_questions = progress.answerLog.filter((log) => log.isCorrect).length + (isCorrect ? 1 : 0);
-        progress.total_questions = backendQuestions.length;
-      }
-
       // Update answerLog
       progress.answerLog.push({
-        questionId: new Types.ObjectId(), // Placeholder; replace with actual question ID if available
+        questionId: new Types.ObjectId(),
         selectedAnswer,
         correctAnswer,
         isCorrect,
-        timeTaken: 0, // Update if time tracking is implemented
+        timeTaken: 0,
         timestamp: new Date(),
       });
-
-      await progress.save();
-
-      // Calculate progress based on answerLog
-      const correctQuestions = progress.answerLog.filter((log) => log.isCorrect).length;
-      return await this.calculateProgress(examId, backendQuestions.length, correctQuestions);
-    } catch (error) {
-      console.error('Error in submitAnswer:', error);
-      if (error instanceof NotFoundException || error instanceof BadRequestException) {
-        throw error;
-      }
-      throw new BadRequestException('Failed to process answer submission');
     }
+
+    // Update correct_questions count
+    progress.correct_questions = progress.answerLog.filter((log) => log.isCorrect).length;
+
+    // Ensure correct_questions does not exceed total_questions
+    if (progress.correct_questions > backendQuestions.length) {
+      console.warn(`correct_questions (${progress.correct_questions}) exceeds total_questions (${backendQuestions.length}), adjusting correct_questions.`);
+      progress.correct_questions = backendQuestions.length;
+    }
+
+    // Save progress
+    await progress.save();
+
+    // Calculate and return progress
+    return await this.calculateProgress(
+      examId,
+      backendQuestions.length,
+      progress.correct_questions,
+    );
+  } catch (error) {
+    console.error('Error in submitAnswer:', error);
+    if (error instanceof NotFoundException || error instanceof BadRequestException) {
+      throw error;
+    }
+    throw new BadRequestException('Failed to process answer submission');
   }
+}
 }

@@ -1,4 +1,6 @@
 import { NotFoundException, BadRequestException } from '@nestjs/common';
+import { Types } from 'mongoose';
+import { ExamProgressDocument } from '../schema/exam-progress.schema';
 
 // Backend Question interface (authoritative, with correct answers)
 export interface IQuestion {
@@ -95,7 +97,7 @@ export async function validateAnswer(
       ) {
         throw new BadRequestException('Invalid exam options or correct options index for single choice');
       }
-      isCorrect = backendQuestion.exam_options[backendQuestion.correct_options] === submittedAnswer;
+      isCorrect = normalizeText(submittedAnswer) === normalizeText(backendQuestion.exam_options[backendQuestion.correct_options]);
       scoreIncrement = isCorrect ? (backendQuestion.points || 1) : 0;
       break;
 
@@ -116,9 +118,9 @@ export async function validateAnswer(
         throw new BadRequestException('Invalid exam options or correct options indices for multi-choice');
       }
       isCorrect =
-        submittedAnswer.sort().join() ===
+        submittedAnswer.map(normalizeText).sort().join() ===
         backendQuestion.correct_options
-          .map((index) => backendQuestion.exam_options![index])
+          .map((index) => normalizeText(backendQuestion.exam_options![index]))
           .sort()
           .join();
       scoreIncrement = isCorrect ? (backendQuestion.points || 1) : 0;
@@ -128,10 +130,12 @@ export async function validateAnswer(
       if (typeof submittedAnswer !== 'boolean') {
         throw new BadRequestException('True/False answer must be a boolean');
       }
-      if (typeof backendQuestion.correct_options !== 'boolean') {
+      if (typeof backendQuestion.correct_options !== 'number') {
         throw new BadRequestException('Invalid correct options for true/false');
       }
-      isCorrect = submittedAnswer === backendQuestion.correct_options;
+      // Map numeric correct_options (0 for true, 1 for false) to boolean
+      const correctBoolean = backendQuestion.correct_options === 0 ? true : false;
+      isCorrect = submittedAnswer === correctBoolean;
       scoreIncrement = isCorrect ? (backendQuestion.points || 1) : 0;
       break;
 
