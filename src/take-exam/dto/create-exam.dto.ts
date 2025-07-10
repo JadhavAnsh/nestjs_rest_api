@@ -44,5 +44,17 @@ export class CreateExamDto {
   @ValidateNested({ each: true })
   @Type(() => CreateQuestionDto)
   @IsNotEmpty()
-  exam_questions: CreateQuestionDto[];
+  round_1: CreateQuestionDto[];
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CreateQuestionDto)
+  @IsNotEmpty()
+  round_2: CreateQuestionDto[];
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CreateQuestionDto)
+  @IsNotEmpty()
+  round_3: CreateQuestionDto[];
 }

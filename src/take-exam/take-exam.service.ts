@@ -79,8 +79,10 @@ export class TakeExamService {
     try {
       const exams = await this.examModel.aggregate([
         { $match: { roadmap_ID: roadmapId } },
-        { $unwind: '$Questions' },
-        { $sample: { size: 25 } },
+        { $unwind: '$round_1' },
+        { $unwind: '$round_2' },
+        { $unwind: '$round_3' },
+        { $sample: { size: 10 } },
         {
           $group: {
             _id: '$_id',
@@ -92,7 +94,10 @@ export class TakeExamService {
             exam_time: { $first: '$exam_time' },
             exam_levels: { $first: '$exam_levels' },
             tags: { $first: '$tags' },
-            Questions: { $push: '$Questions' },
+            // exam_questions: { $push: '$exam_questions' },
+            round_1: { $push: '$round_1' },
+            round_2: { $push: '$round_2' },
+            round_3: { $push: '$round_3' },
           },
         },
       ]);
@@ -133,11 +138,23 @@ export class TakeExamService {
 
       const exam = new this.examModel({
         ...createExamDto,
-        Questions: createExamDto.exam_questions.map((question) => ({
-          question: question.question,
-          exam_options: question.exam_options,
-          question_type: question.question_type,
-          correct_options: question.correct_options,
+        round_1: createExamDto.round_1.map((queuestion) => ({
+          question: queuestion.question,
+          exam_options: queuestion.exam_options,
+          question_type: queuestion.question_type,
+          correct_options: queuestion.correct_options,
+        })),
+        round_2: createExamDto.round_2.map((queuestion) => ({
+          question: queuestion.question,
+          exam_options: queuestion.exam_options,
+          question_type: queuestion.question_type,
+          correct_options: queuestion.correct_options,
+        })),
+        round_3: createExamDto.round_3.map((queuestion) => ({
+          question: queuestion.question,
+          exam_options: queuestion.exam_options,
+          question_type: queuestion.question_type,
+          correct_options: queuestion.correct_options,
         })),
       });
 
@@ -159,13 +176,6 @@ export class TakeExamService {
     examId: string,
   ): Promise<Exam> {
     // Validate input data
-    if (!this.isValidUUID(roadmapId) || !this.isValidUUID(examId)) {
-      this.logger.error('Invalid UUID format for roadmapId or examId');
-      throw new HttpException(
-        'Invalid roadmapId or examId format',
-        HttpStatus.BAD_REQUEST,
-      );
-    }
 
     if (!roadmapData) {
       this.logger.error('roadmapData is null or undefined');
@@ -590,7 +600,9 @@ Begin now. Return **only the JSON object**, formatted as valid JSON in a triple 
       exam_time: examResponse.exam_time,
       exam_levels: examResponse.exam_levels,
       tags: examResponse.tags,
-      exam_questions: examResponse.exam_questions,
+      round_1: examResponse.exam_questions.slice(0, 20),
+      round_2: examResponse.exam_questions.slice(20, 30),
+      round_3: examResponse.exam_questions.slice(30, 40),
     };
 
     // Save the exam
@@ -641,9 +653,4 @@ Begin now. Return **only the JSON object**, formatted as valid JSON in a triple 
     return [...trueFalse, ...singleChoice, ...multipleChoice];
   }
 
-  private isValidUUID(uuid: string): boolean {
-    const uuidRegex =
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    return uuidRegex.test(uuid);
-  }
 }

@@ -30,7 +30,13 @@ export class Exam extends Document {
   tags: string[]; // "Technologies used in the exam"
 
   @Prop({ type: [QuestionSchema], required: true })
-  exam_questions: Question[]; // "Questions of the Exam" Its an Array
+  round_1: Question[]; // "Questions of the Exam" Its an Array
+
+  @Prop({ type: [QuestionSchema], required: true })
+  round_2: Question[]; // "Questions of the Exam" Its an Array
+
+  @Prop({ type: [QuestionSchema], required: true })
+  round_3: Question[]; // "Questions of the Exam" Its an Array
 }
 
 export const ExamSchema = SchemaFactory.createForClass(Exam);
