@@ -184,20 +184,20 @@ async submitAnswer(
       console.error(`Exam not found for examId: ${examId}`);
       throw new HttpException('Exam not found', HttpStatus.NOT_FOUND);
     }
-    if (!exam.exam_questions) {
+    if (!exam.round_1) {
       console.error(`Exam questions not defined for examId: ${examId}`);
       throw new HttpException('Exam questions not found', HttpStatus.NOT_FOUND);
     }
-    if (!Array.isArray(exam.exam_questions)) {
+    if (!Array.isArray(exam.round_1)) {
       console.error(`Exam questions is not an array for examId: ${examId}`);
       throw new HttpException('Invalid exam questions format', HttpStatus.NOT_FOUND);
     }
-    if (!exam.exam_questions.length) {
+    if (!exam.round_1.length) {
       console.error(`No questions available for examId: ${examId}`);
       throw new HttpException('No questions available for this exam', HttpStatus.NOT_FOUND);
     }
 
-    const backendQuestions: IQuestion[] = exam.exam_questions.map((q: any) => ({
+    const backendQuestions: IQuestion[] = exam.round_1.map((q: any) => ({
       question: q.question,
       exam_options: q.exam_options,
       question_type: q.question_type,
