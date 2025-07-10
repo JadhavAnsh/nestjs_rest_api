@@ -52,6 +52,19 @@ export class TakeExamController {
     return exam;
   }
 
+  @Get('get/:examId')
+  async findExamById(
+    @Param('examId') examId: string,
+  ): Promise<Exam> {
+    const exam = await this.takeExamService.findExamById(examId);
+    if (!exam) {
+      throw new NotFoundException(
+        `Exam with ID ${examId} not found`,
+      );
+    }
+    return exam;
+  }
+
   @Post()
   async createExam(@Body() createExamDto: CreateExamDto): Promise<Exam> {
     return this.takeExamService.createExam(createExamDto);
@@ -145,23 +158,23 @@ export class TakeExamController {
     }
   }
 
-  @Get('get/:examId')
-  async getProgress(
-    @Query('examId') examId: string,
-  ): Promise<ExamProgressDocument | null> {
-    try {
-      const progress = await this.takeExamProgressService.getProgress(examId);
-      if (!progress) {
-        throw new HttpException('Progress not found', HttpStatus.NOT_FOUND);
-      }
-      return progress;
-    } catch (error) {
-      throw new HttpException(
-        error.message || 'Failed to retrieve progress',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
-    }
-  }
+  // @Get('get/:examId')
+  // async getProgress(
+  //   @Query('examId') examId: string,
+  // ): Promise<ExamProgressDocument | null> {
+  //   try {
+  //     const progress = await this.takeExamProgressService.getProgress(examId);
+  //     if (!progress) {
+  //       throw new HttpException('Progress not found', HttpStatus.NOT_FOUND);
+  //     }
+  //     return progress;
+  //   } catch (error) {
+  //     throw new HttpException(
+  //       error.message || 'Failed to retrieve progress',
+  //       HttpStatus.INTERNAL_SERVER_ERROR,
+  //     );
+  //   }
+  // }
 
   @Post('submit/:examId')
   async submitAnswer(

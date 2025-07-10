@@ -44,7 +44,7 @@ export class ExamProgressService {
           total_questions: totalQuestions,
           correct_questions: correctQuestions,
           has_started: true,
-          attempts: 1,
+          attempts: 0,
           highest_percentage: percentage,
           attempt_Log: [{ percentage, timestamp: new Date() }],
           lockUntil: null,
@@ -112,13 +112,18 @@ export class ExamProgressService {
         total_questions: backendQuestions.length,
         correct_questions: 0,
         has_started: true,
-        attempts: 1,
+        attempts: 0,
         highest_percentage: 0,
         attempt_Log: [],
         lockUntil: null,
         answerLog: [],
       });
-    } else {
+    // } else {
+    //   // Check if lockUntil is active (in the future)
+    //   if (progress.lockUntil && progress.lockUntil > new Date()) {
+    //     throw new BadRequestException(`Wait Your exam progress Locked until ${progress.lockUntil.toISOString()}`);
+    //   }
+
       progress.total_questions = backendQuestions.length;
       // Clear answerLog to ensure latest attempt answers only
       progress.answerLog = [];
@@ -163,7 +168,7 @@ export class ExamProgressService {
           throw new BadRequestException('Invalid exam_options for single_choice');
         }
         correctAnswer = backendQuestion.exam_options[backendQuestion.correct_options as number];
-      } else if (backendQuestion.question_type === 'multi_choice') {
+      } else if (backendQuestion.question_type === 'multiple_choice') {
         if (!backendQuestion.exam_options) {
           throw new BadRequestException('Invalid exam_options for multi_choice');
         }
@@ -181,7 +186,7 @@ export class ExamProgressService {
 
       // Update answerLog
       progress.answerLog.push({
-        questionId: new Types.ObjectId(),
+        //questionId: new Types.ObjectId(),
         selectedAnswer,
         correctAnswer,
         isCorrect,
@@ -198,6 +203,13 @@ export class ExamProgressService {
       console.warn(`correct_questions (${progress.correct_questions}) exceeds total_questions (${backendQuestions.length}), adjusting correct_questions.`);
       progress.correct_questions = backendQuestions.length;
     }
+
+    // // Set lockUntil after 3rd attempt (8 hours lock)
+    // if (progress.attempts >= 3) {
+    //   const lockDurationMs = 8 * 60 * 60 * 1000; // 8 hours in milliseconds
+    //   progress.lockUntil = new Date(Date.now() + lockDurationMs);
+    //   console.log(`Wait Your exam progress until ${progress.lockUntil.toISOString()}`);
+    // }
 
     // Save progress
     await progress.save();

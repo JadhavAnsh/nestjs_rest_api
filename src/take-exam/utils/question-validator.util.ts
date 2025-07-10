@@ -2,11 +2,10 @@ import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { Types } from 'mongoose';
 import { ExamProgressDocument } from '../schema/exam-progress.schema';
 
-// Backend Question interface (authoritative, with correct answers)
 export interface IQuestion {
   question: string;
   exam_options?: string[];
-  question_type: 'single_choice' | 'multi_choice' | 'true_false';
+  question_type: 'single_choice' | 'multiple_choice' | 'true_false';
   correct_options: number | number[] | boolean;
   points?: number;
 }
@@ -15,7 +14,7 @@ export interface IQuestion {
 export interface IFrontendQuestion {
   question: string;
   exam_options?: string[];
-  question_type: 'single_choice' | 'multi_choice' | 'true_false';
+  question_type: 'single_choice' | 'multiple_choice' | 'true_false';
   answer: string | string[] | boolean;
 }
 
@@ -101,12 +100,12 @@ export async function validateAnswer(
       scoreIncrement = isCorrect ? (backendQuestion.points || 1) : 0;
       break;
 
-    case 'multi_choice':
+    case 'multiple_choice':
       if (!Array.isArray(submittedAnswer) || submittedAnswer.length === 0) {
-        throw new BadRequestException('Multi-choice answer must be a non-empty array');
+        throw new BadRequestException('Multiple choice answer must be a non-empty array');
       }
       if (!Array.isArray(backendQuestion.correct_options) || backendQuestion.correct_options.length === 0) {
-        throw new BadRequestException('Invalid correct options for multi-choice');
+        throw new BadRequestException('Invalid correct options for multiple choice');
       }
       // Ensure exam_options exists and all correct_options indices are valid
       if (
@@ -115,7 +114,7 @@ export async function validateAnswer(
           (index) => index >= backendQuestion.exam_options!.length,
         )
       ) {
-        throw new BadRequestException('Invalid exam options or correct options indices for multi-choice');
+        throw new BadRequestException('Invalid exam options or correct options indices for multiple choice');
       }
       isCorrect =
         submittedAnswer.map(normalizeText).sort().join() ===
