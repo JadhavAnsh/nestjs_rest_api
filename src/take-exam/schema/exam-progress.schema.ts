@@ -18,14 +18,17 @@ export class ExamProgress extends Document {
   @Prop({ type: Boolean, default: false })
   is_completed: boolean;
 
-  @Prop({ type: Number, default: 1 })
+  @Prop({ type: Number, default: 0 })
   attempts: number;
 
   @Prop({ type: Number, default: 0 })
   highest_percentage: number;
 
   @Prop({ type: Date, default: null })
-  lockUntil: Date | null;//for apply th elogin on lock period
+  lockUntil: Date | null;//for apply thelogin on lock period
+
+  @Prop({ type: Date, default: null })
+  lastSubmittedAt: Date | null;
 
   @Prop({
     type: [{

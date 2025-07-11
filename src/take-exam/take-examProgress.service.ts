@@ -83,7 +83,7 @@ export class ExamProgressService {
   }
 
   
-  async  submitAnswer(
+ async submitAnswer(
   this: any,
   examId: string,
   frontendPayload: { quiz_answers: { question: string; answer: string | string[] | boolean }[] },
@@ -94,10 +94,6 @@ export class ExamProgressService {
     if (!frontendPayload.quiz_answers || !Array.isArray(frontendPayload.quiz_answers)) {
       throw new BadRequestException('Invalid payload: quiz_answers must be an array');
     }
-
-    // Log frontend payload and backend questions
-    console.log('Frontend payload:', JSON.stringify(frontendPayload, null, 2));
-    console.log('Backend questions:', JSON.stringify(backendQuestions, null, 2));
 
     // Validate backendQuestions length
     if (backendQuestions.length <= 0) {
@@ -118,12 +114,7 @@ export class ExamProgressService {
         lockUntil: null,
         answerLog: [],
       });
-    // } else {
-    //   // Check if lockUntil is active (in the future)
-    //   if (progress.lockUntil && progress.lockUntil > new Date()) {
-    //     throw new BadRequestException(`Wait Your exam progress Locked until ${progress.lockUntil.toISOString()}`);
-    //   }
-
+    } else {
       progress.total_questions = backendQuestions.length;
       // Clear answerLog to ensure latest attempt answers only
       progress.answerLog = [];
@@ -153,7 +144,7 @@ export class ExamProgressService {
         currentScore,
       );
 
-      currentScore = updatedScore  
+      currentScore = updatedScore;
 
       // Convert answers to strings for answerLog
       const selectedAnswer = Array.isArray(frontendAnswer.answer)
@@ -179,14 +170,8 @@ export class ExamProgressService {
         throw new BadRequestException(`Invalid question type: ${backendQuestion.question_type}`);
       }
 
-      // Log answers
-      console.log('Selected answer:', selectedAnswer);
-      console.log('Correct answer:', correctAnswer);
-      console.log('Is correct:', isCorrect);
-
       // Update answerLog
       progress.answerLog.push({
-        //questionId: new Types.ObjectId(),
         selectedAnswer,
         correctAnswer,
         isCorrect,
@@ -195,21 +180,17 @@ export class ExamProgressService {
       });
     }
 
-    // Update correct_questions count
-    progress.correct_questions = progress.answerLog.filter((log) => log.isCorrect).length;
+    // Calculate correct_questions count based on isCorrect property in answerLog
+    const correctCount = progress.answerLog.reduce((count, log) => count + (log.isCorrect ? 1 : 0), 0);
+    progress.correct_questions = correctCount;
 
     // Ensure correct_questions does not exceed total_questions
     if (progress.correct_questions > backendQuestions.length) {
-      console.warn(`correct_questions (${progress.correct_questions}) exceeds total_questions (${backendQuestions.length}), adjusting correct_questions.`);
       progress.correct_questions = backendQuestions.length;
     }
 
-    // // Set lockUntil after 3rd attempt (8 hours lock)
-    // if (progress.attempts >= 3) {
-    //   const lockDurationMs = 8 * 60 * 60 * 1000; // 8 hours in milliseconds
-    //   progress.lockUntil = new Date(Date.now() + lockDurationMs);
-    //   console.log(`Wait Your exam progress until ${progress.lockUntil.toISOString()}`);
-    // }
+    // Update lastSubmittedAt timestamp
+    progress.lastSubmittedAt = new Date();
 
     // Save progress
     await progress.save();
