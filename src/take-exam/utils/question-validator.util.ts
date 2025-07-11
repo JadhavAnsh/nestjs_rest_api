@@ -40,14 +40,6 @@ export async function validateAnswer(
       .replace(/\s+/g, ' ') // Normalize multiple spaces to single space
       .replace(/[\u200B-\u200D\uFEFF]/g, ''); // Remove zero-width spaces and other invisible characters
 
-  // Log normalized frontend question text
-  console.log('Normalized frontend question:', normalizeText(frontendQuestion.question));
-  // Log normalized backend questions for debugging
-  console.log(
-    'Normalized backend questions:',
-    backendQuestions.map((q) => normalizeText(q.question)),
-  );
-
   // Find matching backend question by normalized question text
   const backendQuestion = backendQuestions.find(
     (q) => normalizeText(q.question) === normalizeText(frontendQuestion.question),
@@ -55,8 +47,6 @@ export async function validateAnswer(
 
   // If no match is found, log detailed mismatch info
   if (!backendQuestion) {
-    console.log('Frontend question (raw):', frontendQuestion.question);
-    console.log('Backend questions (raw):', backendQuestions.map((q) => q.question));
     throw new NotFoundException('No matching question found in backend data');
   }
 

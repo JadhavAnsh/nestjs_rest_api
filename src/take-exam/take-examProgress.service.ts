@@ -31,14 +31,11 @@ export class ExamProgressService {
       }
 
       const percentage = (correctQuestions / totalQuestions) * 100;
-      console.log(`Calculating progress for examId: ${examId}, percentage: ${percentage}`);
 
       // Find or create progress document
       let progress = await this.examProgressModel.findOne({ examId }).exec();
-      console.log(`Existing progress: ${JSON.stringify(progress)}`);
 
       if (!progress) {
-        console.log('Creating new progress document');
         progress = new this.examProgressModel({
           examId,
           total_questions: totalQuestions,
@@ -70,7 +67,6 @@ export class ExamProgressService {
       }
 
       const savedProgress = await progress.save();
-      console.log(`Saved progress: ${JSON.stringify(savedProgress)}`);
       return savedProgress;
     } catch (error) {
       console.error('Error in calculateProgress:', error);

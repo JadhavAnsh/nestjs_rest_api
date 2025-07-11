@@ -61,7 +61,6 @@ export class TakeExamService {
       } else {
         exam = await this.examModel.findOne({ exam_ID: examId }).exec();
       }
-      console.log('Full exam data:', JSON.stringify(exam, null, 2));
       if (!exam) {
         throw new NotFoundException(`Exam with ID ${examId} not found`);
       }
