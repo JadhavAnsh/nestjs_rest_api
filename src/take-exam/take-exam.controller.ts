@@ -9,30 +9,19 @@ import {
   Param,
   Post,
   Query,
+  UsePipes,
+  ValidationPipe,
 } from '@nestjs/common';
-import { CreateExamDto } from './dto/create-exam.dto';
+import { CreateExamDto, GenerateExamDto } from './dto/create-exam.dto';
 import { ExamProgressDocument } from './schema/exam-progress.schema';
 import { Exam } from './schema/exam.schema';
 import { TakeExamService } from './take-exam.service';
 import { ExamProgressService } from './take-examProgress.service';
 
-// Define interfaces for type safety
-interface RoadmapData {
-  roadmap_title: string;
-  modules: Array<{
-    module_title: string;
-    units: Array<{
-      unit_type: string;
-      subunit: Array<{
-        read?: { title: string };
-      }>;
-    }>;
-  }>;
-}
-
 @Controller('take-exam')
 export class TakeExamController {
   private readonly logger = new Logger(TakeExamController.name);
+  
   constructor(
     private readonly takeExamService: TakeExamService,
     private readonly takeExamProgressService: ExamProgressService,
@@ -52,26 +41,56 @@ export class TakeExamController {
   }
 
   @Post()
+  @UsePipes(new ValidationPipe({ transform: true }))
   async createExam(@Body() createExamDto: CreateExamDto): Promise<Exam> {
     return this.takeExamService.createExam(createExamDto);
   }
 
   @Post('generate')
-  async generateExamByAI(
-    @Body('roadmapData') roadmapData: RoadmapData,
-    @Body('roadmapId') roadmapId: string,
-    @Body('examId') examId: string,
-  ): Promise<Exam> {
-    const rawQuestions =
-      await this.takeExamService.generateRawQuestions(roadmapData);
-    const structuredExamDto =
-      await this.takeExamService.refineQuestionsToExamStructure(
-        rawQuestions,
-        roadmapData,
-        roadmapId,
-        examId,
+  @UsePipes(new ValidationPipe({ transform: true }))
+  async generateExam(@Body() generateExamDto: GenerateExamDto): Promise<{
+    success: boolean;
+    message: string;
+    data?: any;
+    error?: string;
+  }> {
+    try {
+      this.logger.log(
+        `Received exam generation request for roadmap: ${generateExamDto.roadmapId}`,
       );
-    return this.createExam(structuredExamDto);
+
+      // Generate exam with AI enhancement
+      const generatedExam = await this.takeExamService.generateExamWithAI(
+        generateExamDto.roadmapId,
+        generateExamDto.examId,
+        generateExamDto.roadmapData,
+      );
+
+      return {
+        success: true,
+        message: 'Exam generated successfully',
+        data: {
+          examId: generatedExam.exam_ID,
+          roadmapId: generatedExam.roadmap_ID,
+          title: generatedExam.exam_title,
+          description: generatedExam.exam_description,
+          totalQuestions: 90,
+          rounds: 3,
+          examLevel: generatedExam.exam_levels,
+          passingScore: generatedExam.passing_score,
+          timeLimit: generatedExam.exam_time,
+          tags: generatedExam.tags,
+        },
+      };
+    } catch (error) {
+      this.logger.error(`Error generating exam: ${error.message}`, error.stack);
+
+      return {
+        success: false,
+        message: 'Failed to generate exam',
+        error: error.message,
+      };
+    }
   }
 
   @Post(':examId/calculate')

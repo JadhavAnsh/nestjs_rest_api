@@ -9,22 +9,10 @@ import {
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { ExamLevel } from 'src/common/enum/exam-level.enum';
-import { CreateExamDto } from './dto/create-exam.dto';
+import { QuestionType } from 'src/common/enum/question-type.enum';
+import { CreateExamDto, RoadmapDataDto } from './dto/create-exam.dto';
+import { CreateQuestionDto } from './dto/create-question.dto';
 import { Exam } from './schema/exam.schema';
-
-// Define interfaces for type safety
-interface RoadmapData {
-  roadmap_title: string;
-  modules: Array<{
-    module_title: string;
-    units: Array<{
-      unit_type: string;
-      subunit: Array<{
-        read?: { title: string };
-      }>;
-    }>;
-  }>;
-}
 
 @Injectable()
 export class TakeExamService {
@@ -99,38 +87,8 @@ export class TakeExamService {
         );
       }
 
-      // Defensive check before mapping
-      const round1 = Array.isArray(createExamDto.round_1)
-        ? createExamDto.round_1
-        : [];
-      const round2 = Array.isArray(createExamDto.round_2)
-        ? createExamDto.round_2
-        : [];
-      const round3 = Array.isArray(createExamDto.round_3)
-        ? createExamDto.round_3
-        : [];
-
-      const exam = new this.examModel({
-        ...createExamDto,
-        round_1: round1.map((question) => ({
-          question: question.question,
-          exam_options: question.exam_options,
-          question_type: question.question_type,
-          correct_options: question.correct_options,
-        })),
-        round_2: round2.map((question) => ({
-          question: question.question,
-          exam_options: question.exam_options,
-          question_type: question.question_type,
-          correct_options: question.correct_options,
-        })),
-        round_3: round3.map((question) => ({
-          question: question.question,
-          exam_options: question.exam_options,
-          question_type: question.question_type,
-          correct_options: question.correct_options,
-        })),
-      });
+      // Create exam with validated DTO
+      const exam = new this.examModel(createExamDto);
 
       // Save to database
       const savedExam = await exam.save();
@@ -145,292 +103,385 @@ export class TakeExamService {
     }
   }
 
-  async generateRawQuestions(roadmapData: RoadmapData): Promise<any[]> {
-    this.logger.log('Generating raw questions...');
-    const model = this.genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-
-    const { roadmap_title, modules } = roadmapData;
-    const moduleTitles = modules.map((m) => m.module_title);
-    const unitTitles = modules.flatMap((m) =>
-      m.units.flatMap((u) =>
-        u.subunit
-          .map((s) => s.read?.title)
-          .filter((title): title is string => !!title),
-      ),
-    );
-
-    const TARGET_QUESTIONS = 100;
-    const MAX_ATTEMPTS = 5;
-    const collectedQuestions: Record<string, any> = {};
-    let attempt = 1;
-
-    const prompt = `
-Generate exactly 100 unique questions based on the roadmap titled "${roadmap_title}" with modules: ${moduleTitles.join(', ')}, and units: ${unitTitles.join(', ')}.
-
-Return a JSON array of 100 questions with the following strict structure for each question:
-{
-  "question": string, // The question text, 10-100 characters, clear and concise
-  "question_type": "single_choice" | "multiple_choice" | "true_false", // Exactly one of these types
-  "exam_options": string[], // Array of 4 strings for single_choice/multiple_choice, ["True", "False"] for true_false
-  "correct_options": number | number[] // Single number (0-3) for single_choice/true_false, array of exactly 2 numbers (0-3) for multiple_choice
-}
-
-e.g.:
-  {
-    "question": "What is the capital of France?",
-    "question_type": "single_choice",
-    "exam_options": ["Paris", "London", "Berlin", "Rome"],
-    "correct_options": 0
-  },
-  {
-    "question": "Is the Earth round?",
-    "question_type": "true_false",
-    "exam_options": ["True", "False"],
-    "correct_options": 0
-  },
-  {
-    "question": "What is the capital of France?",
-    "question_type": "multiple_choice",
-    "exam_options": ["Paris", "London", "Berlin", "Rome"],
-    "correct_options": [0, 1]
-  }
-
-Requirements:
-- Exactly 100 questions: 35 single_choice, 35 multiple_choice, 30 true_false
-- No duplicate questions
-- Questions must be relevant to the roadmap topics
-- For multiple_choice, correct_options must contain exactly 2 valid indices
-- For true_false, exam_options must be exactly ["True", "False"]
-- Return only the JSON array, no additional text
-`;
-
-    while (
-      Object.keys(collectedQuestions).length < TARGET_QUESTIONS &&
-      attempt <= MAX_ATTEMPTS
-    ) {
-      try {
-        const result = await model.generateContent({
-          contents: [{ role: 'user', parts: [{ text: prompt }] }],
-          generationConfig: {
-            responseMimeType: 'application/json',
-            maxOutputTokens: 8000,
-            temperature: 0.7,
-          },
+  private generateRawQuestions(roadmapData: RoadmapDataDto): CreateQuestionDto[] {
+    const questions: CreateQuestionDto[] = [];
+    
+    // Extract all topics from roadmap data
+    const topics: string[] = [];
+    roadmapData.modules.forEach(module => {
+      topics.push(module.module_title);
+      module.units.forEach(unit => {
+        unit.subunit.forEach(subunit => {
+          topics.push(subunit.read.title);
         });
-
-        const rawText = result.response.text();
-        let parsed: any[];
-
-        try {
-          parsed = JSON.parse(rawText);
-        } catch {
-          this.logger.warn(`Attempt ${attempt}: Failed to parse response.`);
-          attempt++;
-          await this.sleep(1000 * attempt);
-          continue;
-        }
-
-        for (const q of parsed) {
-          if (
-            q?.question &&
-            !collectedQuestions[q.question] &&
-            q.question_type &&
-            ['single_choice', 'multiple_choice', 'true_false'].includes(
-              q.question_type,
-            ) &&
-            q.exam_options &&
-            q.correct_options !== undefined &&
-            this.isValidQuestion(q)
-          ) {
-            collectedQuestions[q.question] = q;
-          }
-        }
-
-        this.logger.log(
-          `Collected ${Object.keys(collectedQuestions).length} questions so far.`,
-        );
-      } catch (err) {
-        this.logger.warn(`Attempt ${attempt} failed: ${err.message}`);
-      }
-
-      attempt++;
-      await this.sleep(1000 * attempt);
-    }
-
-    const finalQuestions = Object.values(collectedQuestions);
-    if (finalQuestions.length < TARGET_QUESTIONS) {
-      throw new InternalServerErrorException(
-        `Only ${finalQuestions.length} unique questions generated after ${MAX_ATTEMPTS} attempts.`,
-      );
-    }
-
-    return finalQuestions.slice(0, TARGET_QUESTIONS);
-  }
-
-  private isValidQuestion(question: any): boolean {
-    const { question_type, exam_options, correct_options } = question;
-
-    if (
-      typeof question !== 'string' ||
-      question.length < 10 ||
-      question.length > 100
-    ) {
-      return false;
-    }
-
-    if (question_type === 'true_false') {
-      return (
-        Array.isArray(exam_options) &&
-        exam_options.length === 2 &&
-        exam_options[0] === 'True' &&
-        exam_options[1] === 'False' &&
-        Number.isInteger(correct_options) &&
-        correct_options >= 0 &&
-        correct_options <= 1
-      );
-    }
-
-    if (question_type === 'single_choice') {
-      return (
-        Array.isArray(exam_options) &&
-        exam_options.length === 4 &&
-        exam_options.every((opt: any) => typeof opt === 'string') &&
-        Number.isInteger(correct_options) &&
-        correct_options >= 0 &&
-        correct_options <= 3
-      );
-    }
-
-    if (question_type === 'multiple_choice') {
-      return (
-        Array.isArray(exam_options) &&
-        exam_options.length === 4 &&
-        exam_options.every((opt: any) => typeof opt === 'string') &&
-        Array.isArray(correct_options) &&
-        correct_options.length === 2 &&
-        correct_options.every(
-          (i: any) => Number.isInteger(i) && i >= 0 && i <= 3,
-        )
-      );
-    }
-
-    return false;
-  }
-
-  async refineQuestionsToExamStructure(
-    rawQuestions: any[],
-    roadmapData: RoadmapData,
-    roadmapId: string,
-    examId: string,
-  ): Promise<CreateExamDto> {
-    this.logger.log('Refining questions to exam structure...');
-    const model = this.genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-
-    const { roadmap_title, modules } = roadmapData;
-    const moduleTitles = modules.map((m) => m.module_title);
-    const unitTitles = modules.flatMap((m) =>
-      m.units.flatMap((u) =>
-        u.subunit
-          .map((s) => s.read?.title)
-          .filter((title): title is string => !!title),
-      ),
-    );
-
-    rawQuestions.forEach((question) => this.sanitizeQuestionOptions(question));
-
-    const prompt = `
-You are given 100 validated exam questions. Structure them into a JSON object for an exam with 3 rounds.
-
-Strict output format:
-{
-  "roadmap_ID": "${roadmapId}",
-  "exam_ID": "${examId}",
-  "exam_title": "${roadmap_title} Comprehensive Exam",
-  "exam_description": "A comprehensive exam covering all modules and units of ${roadmap_title}",
-  "passing_score": 80,
-  "exam_time": 120,
-  "exam_levels": "${ExamLevel.MEDIUM}",
-  "tags": ["${roadmap_title}", "${moduleTitles[0] || 'General'}", "${unitTitles[0] || 'General'}"],
-  "round_1": [],
-  "round_2": [],
-  "round_3": []
-}
-
-Requirements:
-- Distribute 100 questions equally across rounds (33-34 questions each)
-- Each round must have balanced question types as specified
-- Maintain exact question structure from input
-- Use all 100 questions, no additions or modifications
-- Return only the JSON object, no additional text
-
-Input questions:
-${JSON.stringify(rawQuestions)}
-`;
-
-    const result = await model.generateContent({
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      generationConfig: {
-        responseMimeType: 'application/json',
-        maxOutputTokens: 10000,
-        temperature: 0.4,
-      },
+      });
     });
 
-    const refined = result.response.text();
+    // Generate 30 true/false questions
+    for (let i = 0; i < 30; i++) {
+      const topic = topics[i % topics.length];
+      const question = this.generateTrueFalseQuestion(topic, roadmapData.roadmap_title);
+      questions.push(question);
+    }
 
+    // Generate 30 single choice questions
+    for (let i = 0; i < 30; i++) {
+      const topic = topics[i % topics.length];
+      const question = this.generateSingleChoiceQuestion(topic, roadmapData.roadmap_title);
+      questions.push(question);
+    }
+
+    // Generate 30 multiple choice questions
+    for (let i = 0; i < 30; i++) {
+      const topic = topics[i % topics.length];
+      const question = this.generateMultipleChoiceQuestion(topic, roadmapData.roadmap_title);
+      questions.push(question);
+    }
+
+    // Shuffle questions for variety
+    const shuffledQuestions = this.shuffleArray(questions);
+
+    this.logger.log(`Generated ${shuffledQuestions.length} questions`);
+    return shuffledQuestions;
+  }
+
+  private generateTrueFalseQuestion(topic: string, roadmapTitle: string): CreateQuestionDto {
+    const statements = [
+      `${topic} is a fundamental concept in ${roadmapTitle}`,
+      `Understanding ${topic} is essential for mastering ${roadmapTitle}`,
+      `${topic} requires prior knowledge of advanced programming concepts`,
+      `${topic} is typically covered in beginner-level courses`,
+      `${topic} involves practical implementation exercises`
+    ];
+
+    const statement = statements[Math.floor(Math.random() * statements.length)];
+    const isTrue = Math.random() > 0.5;
+    
+    return {
+      question: isTrue ? statement : `${statement} (This is incorrect)`,
+      question_type: QuestionType.TRUE_FALSE,
+      exam_options: ["True", "False"],
+      correct_options: isTrue ? 0 : 1
+    };
+  }
+
+  private generateSingleChoiceQuestion(topic: string, roadmapTitle: string): CreateQuestionDto {
+    const questions = [
+      `What is the primary purpose of ${topic}?`,
+      `Which of the following best describes ${topic}?`,
+      `When working with ${topic}, what is the most important consideration?`,
+      `How does ${topic} relate to ${roadmapTitle}?`
+    ];
+
+    const question = questions[Math.floor(Math.random() * questions.length)];
+    const correctAnswer = `${topic} is a core component that enables efficient development`;
+    const wrongAnswers = [
+      `${topic} is primarily used for database management`,
+      `${topic} is only relevant for advanced users`,
+      `${topic} is deprecated and should be avoided`
+    ];
+
+    const options = [correctAnswer, ...wrongAnswers];
+    const shuffledOptions = this.shuffleArray(options);
+    const correctIndex = shuffledOptions.indexOf(correctAnswer);
+
+    return {
+      question,
+      question_type: QuestionType.SINGLE_CHOICE,
+      exam_options: shuffledOptions,
+      correct_options: correctIndex
+    };
+  }
+
+  private generateMultipleChoiceQuestion(topic: string, roadmapTitle: string): CreateQuestionDto {
+    const questions = [
+      `Which of the following are key aspects of ${topic}? (Select 2)`,
+      `What are the main benefits of understanding ${topic}? (Select 2)`,
+      `Which statements about ${topic} are correct? (Select 2)`
+    ];
+
+    const question = questions[Math.floor(Math.random() * questions.length)];
+    const correctAnswers = [
+      `${topic} improves code quality and maintainability`,
+      `${topic} is essential for professional development`
+    ];
+    const wrongAnswers = [
+      `${topic} is only used in legacy systems`,
+      `${topic} requires expensive third-party tools`
+    ];
+
+    const options = [...correctAnswers, ...wrongAnswers];
+    const shuffledOptions = this.shuffleArray(options);
+    const correctIndices = correctAnswers.map(answer => shuffledOptions.indexOf(answer));
+
+    return {
+      question,
+      question_type: QuestionType.MULTIPLE_CHOICE,
+      exam_options: shuffledOptions,
+      correct_options: correctIndices
+    };
+  }
+
+  private shuffleArray<T>(array: T[]): T[] {
+    const shuffled = [...array];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
+  }
+
+  private determineExamLevel(roadmapData: RoadmapDataDto): ExamLevel {
+    const totalUnits = roadmapData.modules.reduce((total, module) => {
+      return total + module.units.reduce((unitTotal, unit) => {
+        return unitTotal + unit.subunit.length;
+      }, 0);
+    }, 0);
+
+    // Determine level based on complexity
+    if (totalUnits <= 4) {
+      return ExamLevel.EASY;
+    } else if (totalUnits <= 8) {
+      return ExamLevel.MEDIUM;
+    } else {
+      return ExamLevel.HARD;
+    }
+  }
+
+  private refineQuestionsToExamStructure(params: {
+    roadmapId: string;
+    examId: string;
+    roadmapData: RoadmapDataDto;
+    rawQuestions: CreateQuestionDto[];
+  }): CreateExamDto {
+    const { roadmapId, examId, roadmapData, rawQuestions } = params;
+
+    if (rawQuestions.length !== 90) {
+      throw new Error(`Expected 90 questions, received ${rawQuestions.length}`);
+    }
+
+    // Group questions by type
+    const trueFalseQuestions = rawQuestions.filter(q => q.question_type === QuestionType.TRUE_FALSE);
+    const singleChoiceQuestions = rawQuestions.filter(q => q.question_type === QuestionType.SINGLE_CHOICE);
+    const multipleChoiceQuestions = rawQuestions.filter(q => q.question_type === QuestionType.MULTIPLE_CHOICE);
+
+    // Distribute questions evenly across rounds (10 of each type per round)
+    const round_1: CreateQuestionDto[] = [
+      ...trueFalseQuestions.slice(0, 10),
+      ...singleChoiceQuestions.slice(0, 10),
+      ...multipleChoiceQuestions.slice(0, 10)
+    ];
+
+    const round_2: CreateQuestionDto[] = [
+      ...trueFalseQuestions.slice(10, 20),
+      ...singleChoiceQuestions.slice(10, 20),
+      ...multipleChoiceQuestions.slice(10, 20)
+    ];
+
+    const round_3: CreateQuestionDto[] = [
+      ...trueFalseQuestions.slice(20, 30),
+      ...singleChoiceQuestions.slice(20, 30),
+      ...multipleChoiceQuestions.slice(20, 30)
+    ];
+
+    // Shuffle each round for variety
+    const shuffledRound1 = this.shuffleArray(round_1);
+    const shuffledRound2 = this.shuffleArray(round_2);
+    const shuffledRound3 = this.shuffleArray(round_3);
+
+    // Generate tags from roadmap data
+    const tags = [
+      roadmapData.roadmap_title,
+      ...roadmapData.modules.slice(0, 3).map(module => module.module_title)
+    ].filter(tag => tag && tag.length > 0);
+
+    // Determine exam level based on roadmap complexity
+    const examLevel = this.determineExamLevel(roadmapData);
+
+    const structuredExam: CreateExamDto = {
+      roadmap_ID: roadmapId,
+      exam_ID: examId,
+      exam_title: `${roadmapData.roadmap_title} Comprehensive Exam`,
+      exam_description: `A comprehensive exam covering all modules and units of ${roadmapData.roadmap_title}. This exam tests your understanding of key concepts and practical application skills.`,
+      passing_score: 70,
+      exam_time: 120, // 2 hours in minutes
+      exam_levels: examLevel,
+      tags,
+      round_1: shuffledRound1,
+      round_2: shuffledRound2,
+      round_3: shuffledRound3
+    };
+
+    return structuredExam;
+  }
+
+  async generateExamWithAI(
+    roadmapId: string,
+    examId: string,
+    roadmapData: RoadmapDataDto,
+  ): Promise<Exam> {
     try {
-      const parsed = JSON.parse(refined);
-      return parsed as CreateExamDto;
-    } catch (err) {
-      this.logger.error(`Failed to parse structured exam JSON: ${err.message}`);
-      throw new InternalServerErrorException(
-        'Failed to format AI-generated questions into exam structure',
-      );
+      this.logger.log(`Starting AI-powered exam generation for roadmap: ${roadmapId}`);
+
+      // Step 1: Generate raw questions using local generation
+      const rawQuestions = this.generateRawQuestions(roadmapData);
+      this.logger.log(`Generated ${rawQuestions.length} raw questions`);
+
+      // Step 2: Refine questions to exam structure
+      const examStructure = this.refineQuestionsToExamStructure({
+        roadmapId,
+        examId,
+        roadmapData,
+        rawQuestions,
+      });
+
+      // Step 3: Enhance questions with Gemini AI
+      const enhancedExam = await this.enhanceExamWithGemini(examStructure, roadmapData);
+      
+      // Step 4: Create and save exam to database
+      const createdExam = await this.createExam(enhancedExam);
+      
+      this.logger.log(`Successfully created exam with ID: ${createdExam.exam_ID}`);
+      return createdExam;
+
+    } catch (error) {
+      this.logger.error(`Error in generateExamWithAI: ${error.message}`, error.stack);
+      throw new InternalServerErrorException('Failed to generate exam with AI');
     }
   }
 
-  private sanitizeQuestionOptions(question: any): void {
-    const { question_type, correct_options, exam_options } = question;
+  private async enhanceExamWithGemini(
+    examStructure: CreateExamDto,
+    roadmapData: RoadmapDataDto,
+  ): Promise<CreateExamDto> {
+    try {
+      const model = this.genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
-    if (question_type === 'multiple_choice') {
-      if (!Array.isArray(correct_options) || correct_options.length !== 2) {
-        question.correct_options = [0, 1];
-      } else {
-        question.correct_options = correct_options
-          .filter(
-            (i) => Number.isInteger(i) && i >= 0 && i < exam_options.length,
-          )
-          .slice(0, 2);
-        if (question.correct_options.length < 2) {
-          question.correct_options = [0, 1];
-        }
-      }
-    }
+      // Create a comprehensive prompt for Gemini
+      const prompt = this.createGeminiPrompt(examStructure, roadmapData);
 
-    if (question_type === 'single_choice' || question_type === 'true_false') {
-      if (
-        typeof correct_options !== 'number' ||
-        !Number.isInteger(correct_options) ||
-        correct_options < 0 ||
-        correct_options >= exam_options.length
-      ) {
-        question.correct_options = 0;
-      }
-    }
+      // Generate enhanced content with Gemini
+      const result = await model.generateContent(prompt);
+      const response = await result.response;
+      const enhancedContent = response.text();
 
-    if (
-      question_type === 'true_false' &&
-      (!Array.isArray(exam_options) ||
-        exam_options.length !== 2 ||
-        exam_options[0] !== 'True' ||
-        exam_options[1] !== 'False')
-    ) {
-      question.exam_options = ['True', 'False'];
-      question.correct_options = 0;
+      // Parse and integrate the enhanced content
+      const enhancedExam = this.parseGeminiResponse(enhancedContent, examStructure);
+      
+      this.logger.log('Successfully enhanced exam with Gemini AI');
+      return enhancedExam;
+
+    } catch (error) {
+      this.logger.warn(`Gemini enhancement failed, using original structure: ${error.message}`);
+      // Fallback to original structure if AI enhancement fails
+      return examStructure;
     }
   }
 
-  private sleep(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
+  private createGeminiPrompt(examStructure: CreateExamDto, roadmapData: RoadmapDataDto): string {
+    const topicsContext = roadmapData.modules.map(module => ({
+      module: module.module_title,
+      topics: module.units.flatMap(unit =>
+        unit.subunit.map(sub => sub.read.title)
+      )
+    }));
+
+    return `
+You are an expert educational content creator. I have an exam structure with 90 questions about "${roadmapData.roadmap_title}".
+
+ROADMAP CONTEXT:
+${JSON.stringify(topicsContext, null, 2)}
+
+CURRENT EXAM STRUCTURE:
+- Title: ${examStructure.exam_title}
+- Description: ${examStructure.exam_description}
+- Level: ${examStructure.exam_levels}
+- Total Questions: 90 (30 per round)
+
+TASK: Enhance the exam questions to be more educational, accurate, and challenging while maintaining the exact structure.
+
+REQUIREMENTS:
+1. Keep the exact same number of questions (30 per round)
+2. Maintain question types: true_false, single_choice, multiple_choice
+3. Ensure questions are directly related to the roadmap topics
+4. Make questions more specific and educational
+5. Improve answer options to be more realistic and challenging
+6. Keep the same JSON structure format
+
+SAMPLE QUESTIONS FROM ROUND 1:
+${examStructure.round_1.slice(0, 3).map(q => `"${q.question}"`).join(', ')}...
+
+Please return ONLY a JSON object with the enhanced exam structure maintaining the exact same format but with improved, more educational questions and answer options.
+
+Focus on creating questions that test:
+- Understanding of core concepts
+- Practical application knowledge
+- Problem-solving skills
+- Best practices and common pitfalls
+
+Return the complete enhanced exam structure as valid JSON with the following structure:
+{
+  "exam_title": "...",
+  "exam_description": "...",
+  "round_1": [...],
+  "round_2": [...],
+  "round_3": [...]
+}
+`;
+  }
+
+  private parseGeminiResponse(geminiResponse: string, originalStructure: CreateExamDto): CreateExamDto {
+    try {
+      // Clean the response to extract JSON
+      const jsonMatch = geminiResponse.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        throw new Error('No valid JSON found in Gemini response');
+      }
+
+      const enhancedData = JSON.parse(jsonMatch[0]);
+      
+      // Validate the enhanced structure has the required format
+      if (!enhancedData.round_1 || !enhancedData.round_2 || !enhancedData.round_3) {
+        throw new Error('Invalid enhanced structure format');
+      }
+
+      // Validate each round has exactly 30 questions
+      if (enhancedData.round_1.length !== 30 || 
+          enhancedData.round_2.length !== 30 || 
+          enhancedData.round_3.length !== 30) {
+        throw new Error('Invalid question count in enhanced structure');
+      }
+
+      // Merge enhanced content with original structure
+      const enhancedExam: CreateExamDto = {
+        ...originalStructure,
+        exam_title: enhancedData.exam_title || originalStructure.exam_title,
+        exam_description: enhancedData.exam_description || originalStructure.exam_description,
+        round_1: enhancedData.round_1.map(q => ({
+          question: q.question,
+          question_type: q.question_type,
+          exam_options: q.exam_options,
+          correct_options: q.correct_options
+        })),
+        round_2: enhancedData.round_2.map(q => ({
+          question: q.question,
+          question_type: q.question_type,
+          exam_options: q.exam_options,
+          correct_options: q.correct_options
+        })),
+        round_3: enhancedData.round_3.map(q => ({
+          question: q.question,
+          question_type: q.question_type,
+          exam_options: q.exam_options,
+          correct_options: q.correct_options
+        }))
+      };
+
+      return enhancedExam;
+
+    } catch (error) {
+      this.logger.warn(`Failed to parse Gemini response: ${error.message}`);
+      return originalStructure;
+    }
   }
 }
