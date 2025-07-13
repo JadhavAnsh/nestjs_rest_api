@@ -1,8 +1,6 @@
-import { GenerativeModel, GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import {
   ConflictException,
-  HttpException,
-  HttpStatus,
   Injectable,
   InternalServerErrorException,
   Logger,
@@ -12,7 +10,6 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { ExamLevel } from 'src/common/enum/exam-level.enum';
 import { CreateExamDto } from './dto/create-exam.dto';
-import { CreateQuestionDto } from './dto/create-question.dto';
 import { Exam } from './schema/exam.schema';
 
 // Define interfaces for type safety
@@ -27,16 +24,6 @@ interface RoadmapData {
       }>;
     }>;
   }>;
-}
-
-interface ExamResponse {
-  exam_title: string;
-  exam_description: string;
-  passing_score: number;
-  exam_time: number;
-  exam_levels: ExamLevel;
-  tags: string[];
-  exam_questions: CreateQuestionDto[];
 }
 
 @Injectable()
@@ -71,7 +58,6 @@ export class TakeExamService {
             exam_time: { $first: '$exam_time' },
             exam_levels: { $first: '$exam_levels' },
             tags: { $first: '$tags' },
-            // exam_questions: { $push: '$exam_questions' },
             round_1: { $push: '$round_1' },
             round_2: { $push: '$round_2' },
             round_3: { $push: '$round_3' },
@@ -113,26 +99,36 @@ export class TakeExamService {
         );
       }
 
-      // Create new exam instance
+      // Defensive check before mapping
+      const round1 = Array.isArray(createExamDto.round_1)
+        ? createExamDto.round_1
+        : [];
+      const round2 = Array.isArray(createExamDto.round_2)
+        ? createExamDto.round_2
+        : [];
+      const round3 = Array.isArray(createExamDto.round_3)
+        ? createExamDto.round_3
+        : [];
+
       const exam = new this.examModel({
         ...createExamDto,
-        round_1: createExamDto.round_1.map((queuestion) => ({
-          question: queuestion.question,
-          exam_options: queuestion.exam_options,
-          question_type: queuestion.question_type,
-          correct_options: queuestion.correct_options,
+        round_1: round1.map((question) => ({
+          question: question.question,
+          exam_options: question.exam_options,
+          question_type: question.question_type,
+          correct_options: question.correct_options,
         })),
-        round_2: createExamDto.round_2.map((queuestion) => ({
-          question: queuestion.question,
-          exam_options: queuestion.exam_options,
-          question_type: queuestion.question_type,
-          correct_options: queuestion.correct_options,
+        round_2: round2.map((question) => ({
+          question: question.question,
+          exam_options: question.exam_options,
+          question_type: question.question_type,
+          correct_options: question.correct_options,
         })),
-        round_3: createExamDto.round_3.map((queuestion) => ({
-          question: queuestion.question,
-          exam_options: queuestion.exam_options,
-          question_type: queuestion.question_type,
-          correct_options: queuestion.correct_options,
+        round_3: round3.map((question) => ({
+          question: question.question,
+          exam_options: question.exam_options,
+          question_type: question.question_type,
+          correct_options: question.correct_options,
         })),
       });
 
@@ -149,487 +145,292 @@ export class TakeExamService {
     }
   }
 
-  async generateExamByRoadmapTitle(
-    roadmapData: RoadmapData,
-    roadmapId: string,
-    examId: string,
-  ): Promise<Exam> {
-    // Validate input data
+  async generateRawQuestions(roadmapData: RoadmapData): Promise<any[]> {
+    this.logger.log('Generating raw questions...');
+    const model = this.genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
-    if (!roadmapData) {
-      this.logger.error('roadmapData is null or undefined');
-      throw new HttpException(
-        'roadmapData is required',
-        HttpStatus.BAD_REQUEST,
-      );
-    }
-
-    if (
-      !roadmapData.roadmap_title ||
-      typeof roadmapData.roadmap_title !== 'string' ||
-      roadmapData.roadmap_title.trim() === ''
-    ) {
-      this.logger.error('Invalid roadmap_title: must be a non-empty string');
-      throw new HttpException(
-        'Invalid roadmap_title: must be a non-empty string',
-        HttpStatus.BAD_REQUEST,
-      );
-    }
-
-    if (
-      !Array.isArray(roadmapData.modules) ||
-      roadmapData.modules.length === 0
-    ) {
-      this.logger.error('Invalid modules: must be a non-empty array');
-      throw new HttpException(
-        'Invalid modules: must be a non-empty array',
-        HttpStatus.BAD_REQUEST,
-      );
-    }
-
-    // Extract relevant data
-    const roadmapTitle = roadmapData.roadmap_title.trim();
-    const moduleTitles = roadmapData.modules.map(
-      (module) => module.module_title,
+    const { roadmap_title, modules } = roadmapData;
+    const moduleTitles = modules.map((m) => m.module_title);
+    const unitTitles = modules.flatMap((m) =>
+      m.units.flatMap((u) =>
+        u.subunit
+          .map((s) => s.read?.title)
+          .filter((title): title is string => !!title),
+      ),
     );
-    const readTitles = roadmapData.modules.flatMap((module) =>
-      module.units
-        .filter((unit) => unit.unit_type === 'read')
-        .flatMap((unit) =>
-          unit.subunit
-            .map((sub) => sub.read?.title)
-            .filter((title): title is string => !!title),
-        ),
-    );
+
+    const TARGET_QUESTIONS = 100;
+    const MAX_ATTEMPTS = 5;
+    const collectedQuestions: Record<string, any> = {};
+    let attempt = 1;
 
     const prompt = `
-You are to generate a **valid JSON** object representing a JavaScript exam using the following learning roadmap data:
+Generate exactly 100 unique questions based on the roadmap titled "${roadmap_title}" with modules: ${moduleTitles.join(', ')}, and units: ${unitTitles.join(', ')}.
 
-- Roadmap Title: ${roadmapTitle}
-- Module Titles: ${moduleTitles.join(', ')}
-- Reading Topics: ${readTitles.join(', ')}
-
----
-
-### 📘 Exam Instructions
-
-Create an exam that:
-
-- Has **exactly 50 questions** total.
-- Follows this question type distribution:
-  - **20 true_false** questions
-  - **20 single_choice** questions
-  - **10 multiple_choice** questions
-- Every question must contain **exactly 4 exam_options**.
-- Multiple choice (multiple_choice) questions must contain **exactly 2 correct options**.
-- Each question must have a correct_options for:
-  - true_false: number (0 or 1)
-  - single_choice: number (0–3)
-  - multiple_choice: array of exactly 2 numbers (e.g., [0, 3])
-
----
-
-### 🧠 Content Focus
-
-Ensure all questions are:
-- Based on the roadmap and topics provided.
-- Cover beginner JavaScript concepts like:
-  - Syntax and operators
-  - Variables and data types
-  - Functions and scope
-  - Loops and conditionals
-  - Arrays and objects
-  - Events and event listeners
-  - DOM manipulation
-
----
-
-### ⚠️ JSON Format Guidelines
-
-Wrap your output **strictly** like this:
-
-\`\`\`json
+Return a JSON array of 100 questions with the following strict structure for each question:
 {
-  "exam_title": "Basics of JavaScript Exam",
-  "exam_description": "A comprehensive exam to test knowledge of fundamental JavaScript concepts for web development",
-  "passing_score": 75,
-  "exam_time": 120,
-  "exam_levels": "medium",
-  "tags": ["JavaScript", "Web Development", "Frontend", "Programming"],
-  "exam_questions": [
-    {
-      "question": "JavaScript is a statically typed language.",
-      "exam_options": ["True", "False", "Maybe", "Depends"],
-      "question_type": "true_false",
-      "correct_options": 1
-    },
-    {
-      "question": "Which keyword is used to declare a variable in JavaScript?",
-      "exam_options": ["var", "let", "const", "int"],
-      "question_type": "single_choice",
-      "correct_options": 0
-    },
-    {
-      "question": "Which of the following are JavaScript data types?",
-      "exam_options": ["Number", "String", "Character", "Boolean"],
-      "question_type": "multiple_choice",
-      "correct_options": [0, 1]
-    }
-    // ...total 50 questions
-  ]
+  "question": string, // The question text, 10-100 characters, clear and concise
+  "question_type": "single_choice" | "multiple_choice" | "true_false", // Exactly one of these types
+  "exam_options": string[], // Array of 4 strings for single_choice/multiple_choice, ["True", "False"] for true_false
+  "correct_options": number | number[] // Single number (0-3) for single_choice/true_false, array of exactly 2 numbers (0-3) for multiple_choice
 }
-\`\`\`
 
----
+e.g.:
+  {
+    "question": "What is the capital of France?",
+    "question_type": "single_choice",
+    "exam_options": ["Paris", "London", "Berlin", "Rome"],
+    "correct_options": 0
+  },
+  {
+    "question": "Is the Earth round?",
+    "question_type": "true_false",
+    "exam_options": ["True", "False"],
+    "correct_options": 0
+  },
+  {
+    "question": "What is the capital of France?",
+    "question_type": "multiple_choice",
+    "exam_options": ["Paris", "London", "Berlin", "Rome"],
+    "correct_options": [0, 1]
+  }
 
-### 🔒 Strict Output Requirements
-
-- **All output must be valid JSON** wrapped in triple backticks with a json tag.
-- Output must include **exactly 50 questions** — no more, no less.
-- Every question must include **exactly 4 distinct options**.
-- true_false questions must have:
-  "exam_options": ["True", "False", "Maybe", "Depends"]
-  "correct_options": 0 or 1
-— **no other values allowed** (e.g., not "Sometimes", etc.).
-- multiple_choice questions must include **exactly 2 correct options** in correct_options.
-- Escape all special characters correctly (e.g., quotes, newlines) to ensure valid JSON.
-- **Do not include roadmap_ID, exam_ID, or any other fields not specified**.
-- **Do not include any explanations, markdown, or notes outside the triple backtick block**.
-- **Do not repeat or duplicate questions**.
-
-Begin now. Return **only the JSON object**, formatted as valid JSON in a triple backtick \`\`\`json block.
+Requirements:
+- Exactly 100 questions: 35 single_choice, 35 multiple_choice, 30 true_false
+- No duplicate questions
+- Questions must be relevant to the roadmap topics
+- For multiple_choice, correct_options must contain exactly 2 valid indices
+- For true_false, exam_options must be exactly ["True", "False"]
+- Return only the JSON array, no additional text
 `;
 
-    // Retry logic for AI service
-    const maxRetries = 5;
-    let attempt = 0;
-    let examResponse: ExamResponse | null = null;
-
-    while (attempt < maxRetries) {
+    while (
+      Object.keys(collectedQuestions).length < TARGET_QUESTIONS &&
+      attempt <= MAX_ATTEMPTS
+    ) {
       try {
-        this.logger.log(`Attempt ${attempt + 1}: Initializing Gemini AI model`);
-        const model: GenerativeModel = this.genAI.getGenerativeModel({
-          model: 'gemini-1.5-pro',
-        });
-
-        this.logger.log(`Attempt ${attempt + 1}: Sending prompt to Gemini AI`);
         const result = await model.generateContent({
           contents: [{ role: 'user', parts: [{ text: prompt }] }],
           generationConfig: {
-            maxOutputTokens: 15000, // Increased to handle 50 questions
+            responseMimeType: 'application/json',
+            maxOutputTokens: 8000,
             temperature: 0.7,
           },
         });
 
-        const responseText = result.response.text();
-        this.logger.log(
-          `Attempt ${attempt + 1}: Received response from Gemini AI`,
-        );
-        this.logger.debug(`Raw AI response: ${responseText}`);
+        const rawText = result.response.text();
+        let parsed: any[];
 
-        // Extract JSON from response
-        const jsonMatch = responseText.match(/```json\n([\s\S]*?)\n```/);
-        if (!jsonMatch?.[1]) {
-          this.logger.error(
-            'Invalid JSON format in AI response: JSON not wrapped in triple backticks',
-          );
-          throw new Error(
-            'Invalid JSON format in AI response: JSON not wrapped in triple backticks',
-          );
-        }
-
-        const jsonString = jsonMatch[1].trim();
         try {
-          examResponse = JSON.parse(jsonString);
-        } catch (parseError) {
-          this.logger.error(
-            `Failed to parse AI response as JSON: ${parseError.message}`,
-          );
-          this.logger.debug(`Faulty JSON string: ${jsonString}`);
-          throw new Error(`Failed to parse AI response: ${parseError.message}`);
+          parsed = JSON.parse(rawText);
+        } catch {
+          this.logger.warn(`Attempt ${attempt}: Failed to parse response.`);
+          attempt++;
+          await this.sleep(1000 * attempt);
+          continue;
         }
 
-        break; // Success, exit retry loop
-      } catch (error) {
-        attempt++;
-        const isRateLimitError =
-          error.message.includes('429') ||
-          error.message.includes('Too Many Requests');
-        if (isRateLimitError) {
-          this.logger.warn(
-            `Rate limit exceeded on attempt ${attempt}: ${error.message}`,
-          );
-          if (attempt === maxRetries) {
-            this.logger.error(
-              `Failed to generate exam after ${maxRetries} attempts due to rate limit: ${error.message}`,
-              error.stack,
-            );
-            throw new HttpException(
-              'Rate limit exceeded for AI service. Please try again later or contact support.',
-              HttpStatus.TOO_MANY_REQUESTS,
-            );
+        for (const q of parsed) {
+          if (
+            q?.question &&
+            !collectedQuestions[q.question] &&
+            q.question_type &&
+            ['single_choice', 'multiple_choice', 'true_false'].includes(
+              q.question_type,
+            ) &&
+            q.exam_options &&
+            q.correct_options !== undefined &&
+            this.isValidQuestion(q)
+          ) {
+            collectedQuestions[q.question] = q;
           }
-          await new Promise((resolve) =>
-            setTimeout(resolve, 60000 * Math.pow(2, attempt)),
-          );
-        } else {
-          this.logger.warn(
-            `Attempt ${attempt} failed: ${error.message}`,
-            error.stack,
-          );
-          if (attempt === maxRetries) {
-            this.logger.error(
-              `Failed to generate exam after ${maxRetries} attempts: ${error.message}`,
-              error.stack,
-            );
-            throw new HttpException(
-              `Failed to generate exam from AI service: ${error.message}`,
-              HttpStatus.INTERNAL_SERVER_ERROR,
-            );
-          }
-          await new Promise((resolve) =>
-            setTimeout(resolve, 1000 * Math.pow(2, attempt)),
-          );
         }
+
+        this.logger.log(
+          `Collected ${Object.keys(collectedQuestions).length} questions so far.`,
+        );
+      } catch (err) {
+        this.logger.warn(`Attempt ${attempt} failed: ${err.message}`);
       }
+
+      attempt++;
+      await this.sleep(1000 * attempt);
     }
 
-    if (!examResponse) {
-      this.logger.error('No valid response from AI service after retries');
-      throw new HttpException(
-        'No valid response from AI service',
-        HttpStatus.INTERNAL_SERVER_ERROR,
+    const finalQuestions = Object.values(collectedQuestions);
+    if (finalQuestions.length < TARGET_QUESTIONS) {
+      throw new InternalServerErrorException(
+        `Only ${finalQuestions.length} unique questions generated after ${MAX_ATTEMPTS} attempts.`,
       );
     }
 
-    examResponse.exam_questions = this.enforceExactDistribution(
-      examResponse.exam_questions,
-    );
+    return finalQuestions.slice(0, TARGET_QUESTIONS);
+  }
 
-    // Validate response structure
-    const validationErrors: string[] = [];
-    if (!examResponse.exam_title)
-      validationErrors.push('exam_title is missing');
-    if (!examResponse.exam_description)
-      validationErrors.push('exam_description is missing');
-    if (!examResponse.exam_questions)
-      validationErrors.push('exam_questions is missing');
-    if (examResponse.exam_questions.length > 50) {
-      this.logger.warn(`More than 50 questions received: trimming to 50`);
-      examResponse.exam_questions = examResponse.exam_questions.slice(0, 50);
-    }
+  private isValidQuestion(question: any): boolean {
+    const { question_type, exam_options, correct_options } = question;
 
-    if (!examResponse.passing_score)
-      validationErrors.push('passing_score is missing');
-    if (!examResponse.exam_time) validationErrors.push('exam_time is missing');
     if (
-      !examResponse.exam_levels ||
-      !['basic', 'medium', 'hard'].includes(examResponse.exam_levels)
+      typeof question !== 'string' ||
+      question.length < 10 ||
+      question.length > 100
     ) {
-      validationErrors.push(
-        `exam_levels is invalid: ${examResponse.exam_levels}`,
-      );
-    }
-    if (!Array.isArray(examResponse.tags))
-      validationErrors.push('tags is not an array');
-
-    // Check for unexpected fields
-    const expectedFields = [
-      'exam_title',
-      'exam_description',
-      'passing_score',
-      'exam_time',
-      'exam_levels',
-      'tags',
-      'exam_questions',
-    ];
-    const unexpectedFields = Object.keys(examResponse).filter(
-      (key) => !expectedFields.includes(key),
-    );
-    if (unexpectedFields.length > 0) {
-      this.logger.warn(
-        `Unexpected fields in AI response: ${unexpectedFields.join(', ')}`,
-      );
-      unexpectedFields.forEach((key) => delete examResponse[key]);
+      return false;
     }
 
-    if (validationErrors.length > 0) {
-      this.logger.error(
-        `Invalid exam structure: ${validationErrors.join('; ')}`,
-      );
-      throw new HttpException(
-        `Invalid exam structure from AI service: ${validationErrors.join('; ')}`,
-        HttpStatus.INTERNAL_SERVER_ERROR,
+    if (question_type === 'true_false') {
+      return (
+        Array.isArray(exam_options) &&
+        exam_options.length === 2 &&
+        exam_options[0] === 'True' &&
+        exam_options[1] === 'False' &&
+        Number.isInteger(correct_options) &&
+        correct_options >= 0 &&
+        correct_options <= 1
       );
     }
 
-    // Validate question types, options, and correct_options
-    const questionCounts = {
-      true_false: 0,
-      single_choice: 0,
-      multiple_choice: 0,
-    };
+    if (question_type === 'single_choice') {
+      return (
+        Array.isArray(exam_options) &&
+        exam_options.length === 4 &&
+        exam_options.every((opt: any) => typeof opt === 'string') &&
+        Number.isInteger(correct_options) &&
+        correct_options >= 0 &&
+        correct_options <= 3
+      );
+    }
 
-    for (const question of examResponse.exam_questions) {
-      if (
-        !question.question_type ||
-        !['true_false', 'single_choice', 'multiple_choice'].includes(
-          question.question_type,
+    if (question_type === 'multiple_choice') {
+      return (
+        Array.isArray(exam_options) &&
+        exam_options.length === 4 &&
+        exam_options.every((opt: any) => typeof opt === 'string') &&
+        Array.isArray(correct_options) &&
+        correct_options.length === 2 &&
+        correct_options.every(
+          (i: any) => Number.isInteger(i) && i >= 0 && i <= 3,
         )
-      ) {
-        this.logger.error(`Invalid question_type: ${question.question_type}`);
-        throw new HttpException(
-          `Invalid question type in AI response: ${question.question_type}`,
-          HttpStatus.INTERNAL_SERVER_ERROR,
-        );
-      }
+      );
+    }
 
-      // Validate number of options
-      if (
-        !Array.isArray(question.exam_options) ||
-        question.exam_options.length !== 4
-      ) {
-        this.logger.error(
-          `Invalid exam_options for question: ${question.question}, expected 4 options, got ${question.exam_options?.length || 0}`,
-        );
-        throw new HttpException(
-          `Invalid exam_options: question must have exactly 4 options`,
-          HttpStatus.INTERNAL_SERVER_ERROR,
-        );
-      }
+    return false;
+  }
 
-      // Validate correct_options
-      if (question.question_type === 'true_false') {
-        if (
-          typeof question.correct_options !== 'number' ||
-          ![0, 1].includes(question.correct_options)
-        ) {
-          this.logger.error(
-            `Invalid correct_options for true_false question: ${question.question}`,
-          );
-          throw new HttpException(
-            `Invalid correct_options for true_false question: must be 0 or 1`,
-            HttpStatus.INTERNAL_SERVER_ERROR,
-          );
-        }
-      } else if (question.question_type === 'single_choice') {
-        if (
-          typeof question.correct_options !== 'number' ||
-          ![0, 1, 2, 3].includes(question.correct_options)
-        ) {
-          this.logger.error(
-            `Invalid correct_options for single_choice question: ${question.question}`,
-          );
-          throw new HttpException(
-            `Invalid correct_options for single_choice question: must be 0, 1, 2, or 3`,
-            HttpStatus.INTERNAL_SERVER_ERROR,
-          );
-        }
-      } else if (question.question_type === 'multiple_choice') {
-        if (
-          !Array.isArray(question.correct_options) ||
-          question.correct_options.length !== 2
-        ) {
-          this.logger.error(
-            `Invalid correct_options for multiple_choice question: ${question.question}`,
-          );
-          throw new HttpException(
-            `Invalid correct_options for multiple_choice question: must be an array of exactly 2 numbers`,
-            HttpStatus.INTERNAL_SERVER_ERROR,
-          );
-        }
-        if (
-          !question.correct_options.every(
-            (opt) => typeof opt === 'number' && [0, 1, 2, 3].includes(opt),
+  async refineQuestionsToExamStructure(
+    rawQuestions: any[],
+    roadmapData: RoadmapData,
+    roadmapId: string,
+    examId: string,
+  ): Promise<CreateExamDto> {
+    this.logger.log('Refining questions to exam structure...');
+    const model = this.genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+
+    const { roadmap_title, modules } = roadmapData;
+    const moduleTitles = modules.map((m) => m.module_title);
+    const unitTitles = modules.flatMap((m) =>
+      m.units.flatMap((u) =>
+        u.subunit
+          .map((s) => s.read?.title)
+          .filter((title): title is string => !!title),
+      ),
+    );
+
+    rawQuestions.forEach((question) => this.sanitizeQuestionOptions(question));
+
+    const prompt = `
+You are given 100 validated exam questions. Structure them into a JSON object for an exam with 3 rounds.
+
+Strict output format:
+{
+  "roadmap_ID": "${roadmapId}",
+  "exam_ID": "${examId}",
+  "exam_title": "${roadmap_title} Comprehensive Exam",
+  "exam_description": "A comprehensive exam covering all modules and units of ${roadmap_title}",
+  "passing_score": 80,
+  "exam_time": 120,
+  "exam_levels": "${ExamLevel.MEDIUM}",
+  "tags": ["${roadmap_title}", "${moduleTitles[0] || 'General'}", "${unitTitles[0] || 'General'}"],
+  "round_1": [],
+  "round_2": [],
+  "round_3": []
+}
+
+Requirements:
+- Distribute 100 questions equally across rounds (33-34 questions each)
+- Each round must have balanced question types as specified
+- Maintain exact question structure from input
+- Use all 100 questions, no additions or modifications
+- Return only the JSON object, no additional text
+
+Input questions:
+${JSON.stringify(rawQuestions)}
+`;
+
+    const result = await model.generateContent({
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      generationConfig: {
+        responseMimeType: 'application/json',
+        maxOutputTokens: 10000,
+        temperature: 0.4,
+      },
+    });
+
+    const refined = result.response.text();
+
+    try {
+      const parsed = JSON.parse(refined);
+      return parsed as CreateExamDto;
+    } catch (err) {
+      this.logger.error(`Failed to parse structured exam JSON: ${err.message}`);
+      throw new InternalServerErrorException(
+        'Failed to format AI-generated questions into exam structure',
+      );
+    }
+  }
+
+  private sanitizeQuestionOptions(question: any): void {
+    const { question_type, correct_options, exam_options } = question;
+
+    if (question_type === 'multiple_choice') {
+      if (!Array.isArray(correct_options) || correct_options.length !== 2) {
+        question.correct_options = [0, 1];
+      } else {
+        question.correct_options = correct_options
+          .filter(
+            (i) => Number.isInteger(i) && i >= 0 && i < exam_options.length,
           )
-        ) {
-          this.logger.error(
-            `Invalid correct_options values for multiple_choice question: ${question.question}`,
-          );
-          throw new HttpException(
-            `Invalid correct_options values for multiple_choice question: must be numbers 0, 1, 2, or 3`,
-            HttpStatus.INTERNAL_SERVER_ERROR,
-          );
+          .slice(0, 2);
+        if (question.correct_options.length < 2) {
+          question.correct_options = [0, 1];
         }
       }
-      questionCounts[question.question_type]++;
+    }
+
+    if (question_type === 'single_choice' || question_type === 'true_false') {
+      if (
+        typeof correct_options !== 'number' ||
+        !Number.isInteger(correct_options) ||
+        correct_options < 0 ||
+        correct_options >= exam_options.length
+      ) {
+        question.correct_options = 0;
+      }
     }
 
     if (
-      questionCounts.true_false !== 20 ||
-      questionCounts.single_choice !== 20 ||
-      questionCounts.multiple_choice !== 10
+      question_type === 'true_false' &&
+      (!Array.isArray(exam_options) ||
+        exam_options.length !== 2 ||
+        exam_options[0] !== 'True' ||
+        exam_options[1] !== 'False')
     ) {
-      this.logger.error(
-        `Incorrect question type distribution: ${JSON.stringify(questionCounts)}`,
-      );
-      throw new HttpException(
-        `Incorrect question type distribution: expected 20 true_false, 20 single_choice, 10 multiple_choice, got ${JSON.stringify(questionCounts)}`,
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
-    }
-
-    // Prepare CreateExamDto
-    const createExamDto: CreateExamDto = {
-      roadmap_ID: roadmapId,
-      exam_ID: examId,
-      exam_title: examResponse.exam_title,
-      exam_description: examResponse.exam_description,
-      passing_score: examResponse.passing_score,
-      exam_time: examResponse.exam_time,
-      exam_levels: examResponse.exam_levels,
-      tags: examResponse.tags,
-      round_1: examResponse.exam_questions.slice(0, 20),
-      round_2: examResponse.exam_questions.slice(20, 30),
-      round_3: examResponse.exam_questions.slice(30, 40),
-    };
-
-    // Save the exam
-    try {
-      const savedExam = await this.createExam(createExamDto);
-      this.logger.log(`Exam successfully generated and saved: ${examId}`);
-      return savedExam;
-    } catch (error) {
-      this.logger.error(`Failed to save exam: ${error.message}`, error.stack);
-      throw new HttpException(
-        'Failed to save generated exam',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+      question.exam_options = ['True', 'False'];
+      question.correct_options = 0;
     }
   }
 
-  private enforceExactDistribution(
-    questions: CreateQuestionDto[],
-  ): CreateQuestionDto[] {
-    const validTrueFalse = questions.filter(
-      (q) =>
-        q.question_type === 'true_false' &&
-        typeof q.correct_options === 'number' &&
-        (q.correct_options === 0 || q.correct_options === 1),
-    );
-
-    const validSingleChoice = questions.filter(
-      (q) =>
-        q.question_type === 'single_choice' &&
-        typeof q.correct_options === 'number' &&
-        q.correct_options >= 0 &&
-        q.correct_options <= 3,
-    );
-
-    const validMultipleChoice = questions.filter(
-      (q) =>
-        q.question_type === 'multiple_choice' &&
-        Array.isArray(q.correct_options) &&
-        q.correct_options.length === 2 &&
-        q.correct_options.every(
-          (opt) => typeof opt === 'number' && opt >= 0 && opt <= 3,
-        ),
-    );
-
-    const trueFalse = validTrueFalse.slice(0, 20);
-    const singleChoice = validSingleChoice.slice(0, 20);
-    const multipleChoice = validMultipleChoice.slice(0, 10);
-    return [...trueFalse, ...singleChoice, ...multipleChoice];
+  private sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
-
 }

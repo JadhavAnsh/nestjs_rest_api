@@ -19,15 +19,15 @@ import { ExamProgressService } from './take-examProgress.service';
 // Define interfaces for type safety
 interface RoadmapData {
   roadmap_title: string;
-  modules: {
+  modules: Array<{
     module_title: string;
-    units: {
+    units: Array<{
       unit_type: string;
-      subunit: {
+      subunit: Array<{
         read?: { title: string };
-      }[];
-    }[];
-  }[];
+      }>;
+    }>;
+  }>;
 }
 
 @Controller('take-exam')
@@ -57,64 +57,21 @@ export class TakeExamController {
   }
 
   @Post('generate')
-  async generateExamByRoadmapTitle(
-    @Body() body: { roadmapData: RoadmapData; roadmapId: string; examId: string },
+  async generateExamByAI(
+    @Body('roadmapData') roadmapData: RoadmapData,
+    @Body('roadmapId') roadmapId: string,
+    @Body('examId') examId: string,
   ): Promise<Exam> {
-    const { roadmapData, roadmapId, examId } = body;
-
-    // Validate input
-    if (!roadmapData || !roadmapId || !examId) {
-      this.logger.error(
-        `Missing required fields: ${!roadmapData ? 'roadmapData' : ''} ${
-          !roadmapId ? 'roadmapId' : ''
-        } ${!examId ? 'examId' : ''}`.trim(),
+    const rawQuestions =
+      await this.takeExamService.generateRawQuestions(roadmapData);
+    const structuredExamDto =
+      await this.takeExamService.refineQuestionsToExamStructure(
+        rawQuestions,
+        roadmapData,
+        roadmapId,
+        examId,
       );
-      throw new HttpException(
-        'Missing required fields: roadmapData, roadmapId, or examId',
-        HttpStatus.BAD_REQUEST,
-      );
-    }
-
-    // Validate roadmapData structure
-    if (!roadmapData.roadmap_title || typeof roadmapData.roadmap_title !== 'string') {
-      this.logger.error(`Invalid roadmapData: roadmap_title is missing or not a string`);
-      throw new HttpException(
-        'Invalid roadmapData: roadmap_title must be a non-empty string',
-        HttpStatus.BAD_REQUEST,
-      );
-    }
-
-    if (!Array.isArray(roadmapData.modules) || roadmapData.modules.length === 0) {
-      this.logger.error(`Invalid roadmapData: modules is missing or empty`);
-      throw new HttpException(
-        'Invalid roadmapData: modules must be a non-empty array',
-        HttpStatus.BAD_REQUEST,
-      );
-    }
-
-    // Validate UUID format
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (!uuidRegex.test(roadmapId) || !uuidRegex.test(examId)) {
-      this.logger.error('Invalid UUID format for roadmapId or examId');
-      throw new HttpException('Invalid roadmapId or examId format', HttpStatus.BAD_REQUEST);
-    }
-
-    try {
-      this.logger.log(`Generating exam for roadmapId: ${roadmapId}, examId: ${examId}`);
-      this.logger.debug(`Request body: ${JSON.stringify(body, null, 2)}`);
-      const exam = await this.takeExamService.generateExamByRoadmapTitle(roadmapData, roadmapId, examId);
-      this.logger.log(`Exam generated successfully: ${examId}`);
-      return exam;
-    } catch (error) {
-      this.logger.error(`Failed to generate exam: ${error.message}`, error.stack);
-      if (error instanceof HttpException) {
-        throw error;
-      }
-      throw new HttpException(
-        'Failed to process exam generation request',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
-    }
+    return this.createExam(structuredExamDto);
   }
 
   @Post(':examId/calculate')
