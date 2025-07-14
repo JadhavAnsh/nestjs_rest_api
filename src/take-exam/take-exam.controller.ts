@@ -10,7 +10,7 @@ import {
   Post,
   Query,
   UsePipes,
-  ValidationPipe,
+  ValidationPipe
 } from '@nestjs/common';
 import { CreateExamDto, GenerateExamDto } from './dto/create-exam.dto';
 import { ExamProgressDocument } from './schema/exam-progress.schema';
@@ -74,12 +74,19 @@ export class TakeExamController {
           roadmapId: generatedExam.roadmap_ID,
           title: generatedExam.exam_title,
           description: generatedExam.exam_description,
-          totalQuestions: 90,
+          totalQuestions: 900, // Updated to reflect 900 total questions
+          questionsPerRound: 300, // Added to show questions per round
           rounds: 3,
           examLevel: generatedExam.exam_levels,
           passingScore: generatedExam.passing_score,
           timeLimit: generatedExam.exam_time,
           tags: generatedExam.tags,
+          questionDistribution: {
+            trueFalse: 100,
+            singleChoice: 100,
+            multipleChoice: 100,
+            perRound: true
+          }
         },
       };
     } catch (error) {
@@ -133,6 +140,54 @@ export class TakeExamController {
     } catch (error) {
       throw new HttpException(
         error.message || 'Failed to retrieve progress',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  // New endpoint to get exam statistics
+  @Get(':examId/stats')
+  async getExamStats(@Param('examId') examId: string): Promise<{
+    totalQuestions: number;
+    questionsPerRound: number;
+    rounds: number;
+    questionTypes: {
+      trueFalse: number;
+      singleChoice: number;
+      multipleChoice: number;
+    };
+    timeAllocation: {
+      totalTime: number;
+      timePerRound: number;
+      timePerQuestion: number;
+    };
+  }> {
+    try {
+      // These are constants based on the new structure
+      const totalQuestions = 900;
+      const questionsPerRound = 300;
+      const rounds = 3;
+      const questionsPerType = 100;
+      const totalTimeMinutes = 360; // 6 hours
+
+      return {
+        totalQuestions,
+        questionsPerRound,
+        rounds,
+        questionTypes: {
+          trueFalse: questionsPerType,
+          singleChoice: questionsPerType,
+          multipleChoice: questionsPerType,
+        },
+        timeAllocation: {
+          totalTime: totalTimeMinutes,
+          timePerRound: totalTimeMinutes / rounds,
+          timePerQuestion: totalTimeMinutes / totalQuestions,
+        },
+      };
+    } catch (error) {
+      throw new HttpException(
+        error.message || 'Failed to retrieve exam statistics',
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }

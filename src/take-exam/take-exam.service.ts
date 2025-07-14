@@ -18,6 +18,11 @@ import { Exam } from './schema/exam.schema';
 export class TakeExamService {
   private readonly logger = new Logger(TakeExamService.name);
   private readonly genAI: GoogleGenerativeAI;
+  
+  // Updated constants for 300 questions per round
+  private readonly QUESTIONS_PER_ROUND = 300;
+  private readonly QUESTIONS_PER_TYPE_PER_ROUND = 100; // 100 of each type per round
+  private readonly TOTAL_QUESTIONS = 900; // 3 rounds × 300 questions
 
   constructor(@InjectModel(Exam.name) private readonly examModel: Model<Exam>) {
     if (!process.env.GEMINI_API_KEY) {
@@ -117,22 +122,22 @@ export class TakeExamService {
       });
     });
 
-    // Generate 30 true/false questions
-    for (let i = 0; i < 30; i++) {
+    // Generate 300 true/false questions (100 per round)
+    for (let i = 0; i < 300; i++) {
       const topic = topics[i % topics.length];
       const question = this.generateTrueFalseQuestion(topic, roadmapData.roadmap_title);
       questions.push(question);
     }
 
-    // Generate 30 single choice questions
-    for (let i = 0; i < 30; i++) {
+    // Generate 300 single choice questions (100 per round)
+    for (let i = 0; i < 300; i++) {
       const topic = topics[i % topics.length];
       const question = this.generateSingleChoiceQuestion(topic, roadmapData.roadmap_title);
       questions.push(question);
     }
 
-    // Generate 30 multiple choice questions
-    for (let i = 0; i < 30; i++) {
+    // Generate 300 multiple choice questions (100 per round)
+    for (let i = 0; i < 300; i++) {
       const topic = topics[i % topics.length];
       const question = this.generateMultipleChoiceQuestion(topic, roadmapData.roadmap_title);
       questions.push(question);
@@ -151,7 +156,17 @@ export class TakeExamService {
       `Understanding ${topic} is essential for mastering ${roadmapTitle}`,
       `${topic} requires prior knowledge of advanced programming concepts`,
       `${topic} is typically covered in beginner-level courses`,
-      `${topic} involves practical implementation exercises`
+      `${topic} involves practical implementation exercises`,
+      `${topic} is considered a core competency for ${roadmapTitle}`,
+      `${topic} has direct applications in real-world scenarios`,
+      `${topic} is built upon prerequisite knowledge of other modules`,
+      `${topic} includes hands-on coding exercises`,
+      `${topic} is essential for certification in ${roadmapTitle}`,
+      `${topic} requires understanding of design patterns`,
+      `${topic} focuses on theoretical concepts rather than practical skills`,
+      `${topic} is primarily concerned with debugging techniques`,
+      `${topic} emphasizes best practices and industry standards`,
+      `${topic} involves collaborative development methodologies`
     ];
 
     const statement = statements[Math.floor(Math.random() * statements.length)];
@@ -170,18 +185,45 @@ export class TakeExamService {
       `What is the primary purpose of ${topic}?`,
       `Which of the following best describes ${topic}?`,
       `When working with ${topic}, what is the most important consideration?`,
-      `How does ${topic} relate to ${roadmapTitle}?`
+      `How does ${topic} relate to ${roadmapTitle}?`,
+      `What is the main advantage of implementing ${topic}?`,
+      `Which approach is recommended when learning ${topic}?`,
+      `What prerequisite knowledge is required for ${topic}?`,
+      `How should ${topic} be applied in production environments?`,
+      `What is the key benefit of mastering ${topic}?`,
+      `Which methodology works best with ${topic}?`,
+      `What common mistake should be avoided when working with ${topic}?`,
+      `How does ${topic} improve development efficiency?`,
+      `What is the relationship between ${topic} and system architecture?`,
+      `Which tool is most commonly used with ${topic}?`,
+      `What performance considerations apply to ${topic}?`
     ];
 
     const question = questions[Math.floor(Math.random() * questions.length)];
-    const correctAnswer = `${topic} is a core component that enables efficient development`;
+    const correctAnswers = [
+      `${topic} is a core component that enables efficient development`,
+      `${topic} provides essential functionality for ${roadmapTitle}`,
+      `${topic} enhances code maintainability and scalability`,
+      `${topic} offers robust solutions for common problems`,
+      `${topic} integrates seamlessly with other components`,
+      `${topic} follows industry-standard conventions`,
+      `${topic} supports modern development practices`
+    ];
+    
     const wrongAnswers = [
       `${topic} is primarily used for database management`,
       `${topic} is only relevant for advanced users`,
-      `${topic} is deprecated and should be avoided`
+      `${topic} is deprecated and should be avoided`,
+      `${topic} requires expensive third-party licenses`,
+      `${topic} is incompatible with modern frameworks`,
+      `${topic} has limited practical applications`,
+      `${topic} is purely theoretical with no real-world use`
     ];
 
-    const options = [correctAnswer, ...wrongAnswers];
+    const correctAnswer = correctAnswers[Math.floor(Math.random() * correctAnswers.length)];
+    const selectedWrongAnswers = this.shuffleArray(wrongAnswers).slice(0, 3);
+    
+    const options = [correctAnswer, ...selectedWrongAnswers];
     const shuffledOptions = this.shuffleArray(options);
     const correctIndex = shuffledOptions.indexOf(correctAnswer);
 
@@ -197,22 +239,45 @@ export class TakeExamService {
     const questions = [
       `Which of the following are key aspects of ${topic}? (Select 2)`,
       `What are the main benefits of understanding ${topic}? (Select 2)`,
-      `Which statements about ${topic} are correct? (Select 2)`
+      `Which statements about ${topic} are correct? (Select 2)`,
+      `What are the essential components of ${topic}? (Select 2)`,
+      `Which best practices apply to ${topic}? (Select 2)`,
+      `What are the primary use cases for ${topic}? (Select 2)`,
+      `Which skills are developed through ${topic}? (Select 2)`,
+      `What are the key advantages of ${topic}? (Select 2)`,
+      `Which principles are fundamental to ${topic}? (Select 2)`,
+      `What are the main features of ${topic}? (Select 2)`
     ];
 
     const question = questions[Math.floor(Math.random() * questions.length)];
     const correctAnswers = [
       `${topic} improves code quality and maintainability`,
-      `${topic} is essential for professional development`
+      `${topic} is essential for professional development`,
+      `${topic} enhances system performance and reliability`,
+      `${topic} facilitates team collaboration and communication`,
+      `${topic} supports scalable application architecture`,
+      `${topic} enables efficient problem-solving approaches`,
+      `${topic} provides industry-standard implementation patterns`,
+      `${topic} ensures robust error handling and debugging`
     ];
+    
     const wrongAnswers = [
       `${topic} is only used in legacy systems`,
-      `${topic} requires expensive third-party tools`
+      `${topic} requires expensive third-party tools`,
+      `${topic} has limited scalability options`,
+      `${topic} is incompatible with modern frameworks`,
+      `${topic} increases development complexity unnecessarily`,
+      `${topic} has poor documentation and community support`,
+      `${topic} is primarily for academic purposes only`,
+      `${topic} lacks industry adoption and support`
     ];
 
-    const options = [...correctAnswers, ...wrongAnswers];
+    const selectedCorrectAnswers = this.shuffleArray(correctAnswers).slice(0, 2);
+    const selectedWrongAnswers = this.shuffleArray(wrongAnswers).slice(0, 2);
+    
+    const options = [...selectedCorrectAnswers, ...selectedWrongAnswers];
     const shuffledOptions = this.shuffleArray(options);
-    const correctIndices = correctAnswers.map(answer => shuffledOptions.indexOf(answer));
+    const correctIndices = selectedCorrectAnswers.map(answer => shuffledOptions.indexOf(answer));
 
     return {
       question,
@@ -256,8 +321,8 @@ export class TakeExamService {
   }): CreateExamDto {
     const { roadmapId, examId, roadmapData, rawQuestions } = params;
 
-    if (rawQuestions.length !== 90) {
-      throw new Error(`Expected 90 questions, received ${rawQuestions.length}`);
+    if (rawQuestions.length !== this.TOTAL_QUESTIONS) {
+      throw new Error(`Expected ${this.TOTAL_QUESTIONS} questions, received ${rawQuestions.length}`);
     }
 
     // Group questions by type
@@ -265,23 +330,23 @@ export class TakeExamService {
     const singleChoiceQuestions = rawQuestions.filter(q => q.question_type === QuestionType.SINGLE_CHOICE);
     const multipleChoiceQuestions = rawQuestions.filter(q => q.question_type === QuestionType.MULTIPLE_CHOICE);
 
-    // Distribute questions evenly across rounds (10 of each type per round)
+    // Distribute questions evenly across rounds (100 of each type per round)
     const round_1: CreateQuestionDto[] = [
-      ...trueFalseQuestions.slice(0, 10),
-      ...singleChoiceQuestions.slice(0, 10),
-      ...multipleChoiceQuestions.slice(0, 10)
+      ...trueFalseQuestions.slice(0, this.QUESTIONS_PER_TYPE_PER_ROUND),
+      ...singleChoiceQuestions.slice(0, this.QUESTIONS_PER_TYPE_PER_ROUND),
+      ...multipleChoiceQuestions.slice(0, this.QUESTIONS_PER_TYPE_PER_ROUND)
     ];
 
     const round_2: CreateQuestionDto[] = [
-      ...trueFalseQuestions.slice(10, 20),
-      ...singleChoiceQuestions.slice(10, 20),
-      ...multipleChoiceQuestions.slice(10, 20)
+      ...trueFalseQuestions.slice(this.QUESTIONS_PER_TYPE_PER_ROUND, this.QUESTIONS_PER_TYPE_PER_ROUND * 2),
+      ...singleChoiceQuestions.slice(this.QUESTIONS_PER_TYPE_PER_ROUND, this.QUESTIONS_PER_TYPE_PER_ROUND * 2),
+      ...multipleChoiceQuestions.slice(this.QUESTIONS_PER_TYPE_PER_ROUND, this.QUESTIONS_PER_TYPE_PER_ROUND * 2)
     ];
 
     const round_3: CreateQuestionDto[] = [
-      ...trueFalseQuestions.slice(20, 30),
-      ...singleChoiceQuestions.slice(20, 30),
-      ...multipleChoiceQuestions.slice(20, 30)
+      ...trueFalseQuestions.slice(this.QUESTIONS_PER_TYPE_PER_ROUND * 2, this.QUESTIONS_PER_TYPE_PER_ROUND * 3),
+      ...singleChoiceQuestions.slice(this.QUESTIONS_PER_TYPE_PER_ROUND * 2, this.QUESTIONS_PER_TYPE_PER_ROUND * 3),
+      ...multipleChoiceQuestions.slice(this.QUESTIONS_PER_TYPE_PER_ROUND * 2, this.QUESTIONS_PER_TYPE_PER_ROUND * 3)
     ];
 
     // Shuffle each round for variety
@@ -302,9 +367,9 @@ export class TakeExamService {
       roadmap_ID: roadmapId,
       exam_ID: examId,
       exam_title: `${roadmapData.roadmap_title} Comprehensive Exam`,
-      exam_description: `A comprehensive exam covering all modules and units of ${roadmapData.roadmap_title}. This exam tests your understanding of key concepts and practical application skills.`,
+      exam_description: `A comprehensive exam covering all modules and units of ${roadmapData.roadmap_title}. This exam tests your understanding of key concepts and practical application skills across ${this.TOTAL_QUESTIONS} questions in 3 rounds.`,
       passing_score: 70,
-      exam_time: 120, // 2 hours in minutes
+      exam_time: 120,
       exam_levels: examLevel,
       tags,
       round_1: shuffledRound1,
@@ -335,7 +400,7 @@ export class TakeExamService {
         rawQuestions,
       });
 
-      // Step 3: Enhance questions with Gemini AI
+      // Step 3: Enhance questions with Gemini AI (process in batches due to large number of questions)
       const enhancedExam = await this.enhanceExamWithGemini(examStructure, roadmapData);
       
       // Step 4: Create and save exam to database
@@ -357,16 +422,19 @@ export class TakeExamService {
     try {
       const model = this.genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
-      // Create a comprehensive prompt for Gemini
-      const prompt = this.createGeminiPrompt(examStructure, roadmapData);
+      // Process each round separately due to the large number of questions
+      const enhancedRounds = await Promise.all([
+        this.enhanceRoundWithGemini(model, examStructure.round_1, roadmapData, 1),
+        this.enhanceRoundWithGemini(model, examStructure.round_2, roadmapData, 2),
+        this.enhanceRoundWithGemini(model, examStructure.round_3, roadmapData, 3)
+      ]);
 
-      // Generate enhanced content with Gemini
-      const result = await model.generateContent(prompt);
-      const response = await result.response;
-      const enhancedContent = response.text();
-
-      // Parse and integrate the enhanced content
-      const enhancedExam = this.parseGeminiResponse(enhancedContent, examStructure);
+      const enhancedExam: CreateExamDto = {
+        ...examStructure,
+        round_1: enhancedRounds[0],
+        round_2: enhancedRounds[1],
+        round_3: enhancedRounds[2]
+      };
       
       this.logger.log('Successfully enhanced exam with Gemini AI');
       return enhancedExam;
@@ -375,6 +443,111 @@ export class TakeExamService {
       this.logger.warn(`Gemini enhancement failed, using original structure: ${error.message}`);
       // Fallback to original structure if AI enhancement fails
       return examStructure;
+    }
+  }
+
+  private async enhanceRoundWithGemini(
+    model: any,
+    roundQuestions: CreateQuestionDto[],
+    roadmapData: RoadmapDataDto,
+    roundNumber: number
+  ): Promise<CreateQuestionDto[]> {
+    try {
+      // Process questions in smaller batches to avoid token limits
+      const batchSize = 50;
+      const enhancedQuestions: CreateQuestionDto[] = [];
+
+      for (let i = 0; i < roundQuestions.length; i += batchSize) {
+        const batch = roundQuestions.slice(i, i + batchSize);
+        const prompt = this.createGeminiBatchPrompt(batch, roadmapData, roundNumber, i / batchSize + 1);
+        
+        const result = await model.generateContent(prompt);
+        const response = await result.response;
+        const enhancedBatch = this.parseGeminiBatchResponse(response.text(), batch);
+        
+        enhancedQuestions.push(...enhancedBatch);
+        
+        // Small delay to respect rate limits
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+
+      return enhancedQuestions;
+    } catch (error) {
+      this.logger.warn(`Failed to enhance round ${roundNumber}: ${error.message}`);
+      return roundQuestions;
+    }
+  }
+
+  private createGeminiBatchPrompt(
+    questions: CreateQuestionDto[],
+    roadmapData: RoadmapDataDto,
+    roundNumber: number,
+    batchNumber: number
+  ): string {
+    const topicsContext = roadmapData.modules.map(module => ({
+      module: module.module_title,
+      topics: module.units.flatMap(unit =>
+        unit.subunit.map(sub => sub.read.title)
+      )
+    }));
+
+    return `
+You are an expert educational content creator. I have a batch of ${questions.length} questions for Round ${roundNumber} (Batch ${batchNumber}) about "${roadmapData.roadmap_title}".
+
+ROADMAP CONTEXT:
+${JSON.stringify(topicsContext, null, 2)}
+
+TASK: Enhance these questions to be more educational, accurate, and challenging while maintaining the exact structure.
+
+REQUIREMENTS:
+1. Keep the exact same number of questions (${questions.length})
+2. Maintain question types: true_false, single_choice, multiple_choice
+3. Ensure questions are directly related to the roadmap topics
+4. Make questions more specific and educational
+5. Improve answer options to be more realistic and challenging
+6. Return only the enhanced questions array in JSON format
+
+CURRENT QUESTIONS BATCH:
+${JSON.stringify(questions.slice(0, 5), null, 2)}...
+
+Return ONLY a JSON array of enhanced questions maintaining the exact same format:
+[
+  {
+    "question": "enhanced question text",
+    "question_type": "true_false|single_choice|multiple_choice",
+    "exam_options": ["option1", "option2", ...],
+    "correct_options": index_or_array_of_indices
+  },
+  ...
+]
+`;
+  }
+
+  private parseGeminiBatchResponse(geminiResponse: string, originalQuestions: CreateQuestionDto[]): CreateQuestionDto[] {
+    try {
+      // Clean the response to extract JSON
+      const jsonMatch = geminiResponse.match(/\[[\s\S]*\]/);
+      if (!jsonMatch) {
+        throw new Error('No valid JSON array found in Gemini response');
+      }
+
+      const enhancedQuestions = JSON.parse(jsonMatch[0]);
+      
+      // Validate the enhanced questions
+      if (!Array.isArray(enhancedQuestions) || enhancedQuestions.length !== originalQuestions.length) {
+        throw new Error('Invalid enhanced questions format or count');
+      }
+
+      return enhancedQuestions.map((q, index) => ({
+        question: q.question || originalQuestions[index].question,
+        question_type: q.question_type || originalQuestions[index].question_type,
+        exam_options: q.exam_options || originalQuestions[index].exam_options,
+        correct_options: q.correct_options !== undefined ? q.correct_options : originalQuestions[index].correct_options
+      }));
+
+    } catch (error) {
+      this.logger.warn(`Failed to parse Gemini batch response: ${error.message}`);
+      return originalQuestions;
     }
   }
 
@@ -387,7 +560,7 @@ export class TakeExamService {
     }));
 
     return `
-You are an expert educational content creator. I have an exam structure with 90 questions about "${roadmapData.roadmap_title}".
+You are an expert educational content creator. I have an exam structure with ${this.TOTAL_QUESTIONS} questions about "${roadmapData.roadmap_title}".
 
 ROADMAP CONTEXT:
 ${JSON.stringify(topicsContext, null, 2)}
@@ -396,28 +569,19 @@ CURRENT EXAM STRUCTURE:
 - Title: ${examStructure.exam_title}
 - Description: ${examStructure.exam_description}
 - Level: ${examStructure.exam_levels}
-- Total Questions: 90 (30 per round)
+- Total Questions: ${this.TOTAL_QUESTIONS} (${this.QUESTIONS_PER_ROUND} per round)
 
 TASK: Enhance the exam questions to be more educational, accurate, and challenging while maintaining the exact structure.
 
 REQUIREMENTS:
-1. Keep the exact same number of questions (30 per round)
+1. Keep the exact same number of questions (${this.QUESTIONS_PER_ROUND} per round)
 2. Maintain question types: true_false, single_choice, multiple_choice
 3. Ensure questions are directly related to the roadmap topics
 4. Make questions more specific and educational
 5. Improve answer options to be more realistic and challenging
 6. Keep the same JSON structure format
 
-SAMPLE QUESTIONS FROM ROUND 1:
-${examStructure.round_1.slice(0, 3).map(q => `"${q.question}"`).join(', ')}...
-
-Please return ONLY a JSON object with the enhanced exam structure maintaining the exact same format but with improved, more educational questions and answer options.
-
-Focus on creating questions that test:
-- Understanding of core concepts
-- Practical application knowledge
-- Problem-solving skills
-- Best practices and common pitfalls
+Due to the large number of questions, please focus on improving the overall quality and educational value.
 
 Return the complete enhanced exam structure as valid JSON with the following structure:
 {
@@ -445,10 +609,10 @@ Return the complete enhanced exam structure as valid JSON with the following str
         throw new Error('Invalid enhanced structure format');
       }
 
-      // Validate each round has exactly 30 questions
-      if (enhancedData.round_1.length !== 30 || 
-          enhancedData.round_2.length !== 30 || 
-          enhancedData.round_3.length !== 30) {
+      // Validate each round has exactly 300 questions
+      if (enhancedData.round_1.length !== this.QUESTIONS_PER_ROUND || 
+          enhancedData.round_2.length !== this.QUESTIONS_PER_ROUND || 
+          enhancedData.round_3.length !== this.QUESTIONS_PER_ROUND) {
         throw new Error('Invalid question count in enhanced structure');
       }
 
