@@ -1,10 +1,10 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document } from 'mongoose';
+import { Document, Types } from 'mongoose';
 
 @Schema({ timestamps: true })
 export class ExamProgress extends Document {
-  @Prop({ type: String, required: true }) // Changed to String to match exam_ID
-  examId: string;
+  @Prop({ type: Types.ObjectId, required: true, ref: 'Exam' })
+  examId: Types.ObjectId;
 
   @Prop({ required: true })
   total_questions: number;
@@ -25,7 +25,10 @@ export class ExamProgress extends Document {
   highest_percentage: number;
 
   @Prop({ type: Date, default: null })
-  lockUntil: Date | null;//for apply th elogin on lock period
+  lockUntil: Date | null;//for apply thelogin on lock period
+
+  @Prop({ type: Date, default: null })
+  lastSubmittedAt: Date | null;
 
   @Prop({
     type: [{
@@ -35,6 +38,26 @@ export class ExamProgress extends Document {
     default: [],
   })
   attempt_Log: { percentage: number; timestamp: Date }[];
+
+  @Prop({
+    type: [{
+      //questionId: { type: Types.ObjectId, required: true, ref: 'Question' }, // Ref to question
+      selectedAnswer: { type: String, required: true }, // Answer selected by user
+      correctAnswer: { type: String, required: true }, // Correct answer (from DB)
+      isCorrect: { type: Boolean, required: true }, // Whether answer is correct
+      timeTaken: { type: Number, default: 0 }, // Time taken to answer (optional)
+      timestamp: { type: Date, default: Date.now }, // When the answer was submitted
+    }],
+    default: [],
+  })
+  answerLog: {
+    //questionId: Types.ObjectId;
+    selectedAnswer: string;
+    correctAnswer: string;
+    isCorrect: boolean;
+    timeTaken?: number;
+    timestamp: Date;
+  }[]; // Stores logs of every answered question
 }
 
 export type ExamProgressDocument = ExamProgress & Document;

@@ -31,6 +31,28 @@ export class TakeExamService {
     }
     this.genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
   }
+//for getting the exam Data , to submit the 
+  async findExamById(examId: string): Promise<Exam> {
+    try {
+      const isObjectId = /^[0-9a-fA-F]{24}$/.test(examId);
+      let exam;
+      if (isObjectId) {
+        exam = await this.examModel.findById(examId).exec();
+      } else {
+        exam = await this.examModel.findOne({ exam_ID: examId }).exec();
+      }
+      if (!exam) {
+        throw new NotFoundException(`Exam with ID ${examId} not found`);
+      }
+      return exam;
+    } catch (error) {
+      console.error('Error in findExamById:', error);
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Failed to retrieve exam');
+    }
+  }
 
   async getExamByRoadmapId(roadmapId: string): Promise<Exam> {
     try {
@@ -92,10 +114,28 @@ export class TakeExamService {
         );
       }
 
-      // Create exam with validated DTO
-      const exam = new this.examModel(createExamDto);
+      const exam = new this.examModel({
+        ...createExamDto,
+        round_1: createExamDto.round_1.map((queuestion) => ({
+          question: queuestion.question,
+          exam_options: queuestion.exam_options,
+          question_type: queuestion.question_type,
+          correct_options: queuestion.correct_options,
+        })),
+        round_2: createExamDto.round_2.map((queuestion) => ({
+          question: queuestion.question,
+          exam_options: queuestion.exam_options,
+          question_type: queuestion.question_type,
+          correct_options: queuestion.correct_options,
+        })),
+        round_3: createExamDto.round_3.map((queuestion) => ({
+          question: queuestion.question,
+          exam_options: queuestion.exam_options,
+          question_type: queuestion.question_type,
+          correct_options: queuestion.correct_options,
+        })),
+      });
 
-      // Save to database
       const savedExam = await exam.save();
       this.logger.log(`Exam created successfully with ID ${savedExam.exam_ID}`);
       return savedExam;
