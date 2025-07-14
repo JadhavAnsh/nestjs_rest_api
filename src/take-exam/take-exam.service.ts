@@ -12,7 +12,21 @@ import { ExamLevel } from 'src/common/enum/exam-level.enum';
 import { QuestionType } from 'src/common/enum/question-type.enum';
 import { CreateExamDto, RoadmapDataDto } from './dto/create-exam.dto';
 import { CreateQuestionDto } from './dto/create-question.dto';
+import { ExamProgress, ExamProgressDocument } from './schema/exam-progress.schema';
 import { Exam } from './schema/exam.schema';
+
+export interface ExamResponseDto {
+  exam_ID: string;
+  exam_title: string;
+  exam_description: string;
+  exam_time: number;
+  passing_score: number;
+  exam_levels: ExamLevel;
+  tags: string[];
+  round_name: string;
+  questions: any[];
+}
+
 
 @Injectable()
 export class TakeExamService {
@@ -20,18 +34,22 @@ export class TakeExamService {
   private readonly genAI: GoogleGenerativeAI;
   
   // Updated constants for 300 questions per round
-  private readonly QUESTIONS_PER_ROUND = 300;
   private readonly QUESTIONS_PER_TYPE_PER_ROUND = 100; // 100 of each type per round
   private readonly TOTAL_QUESTIONS = 900; // 3 rounds × 300 questions
 
-  constructor(@InjectModel(Exam.name) private readonly examModel: Model<Exam>) {
+  private readonly SAMPLE_QUESTIONS_COUNT = 25; // Number of sample questions
+
+  constructor(
+    @InjectModel(Exam.name) private readonly examModel: Model<Exam>,
+    @InjectModel(ExamProgress.name) private readonly examProgressModel: Model<ExamProgressDocument>,
+  ) {
     if (!process.env.GEMINI_API_KEY) {
       this.logger.error('GEMINI_API_KEY is not set in environment variables');
       throw new Error('GEMINI_API_KEY is required');
     }
     this.genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
   }
-//for getting the exam Data , to submit the 
+//for getting the exam Data , to submit the
   async findExamById(examId: string): Promise<Exam> {
     try {
       const isObjectId = /^[0-9a-fA-F]{24}$/.test(examId);
@@ -53,49 +71,105 @@ export class TakeExamService {
       throw new InternalServerErrorException('Failed to retrieve exam');
     }
   }
-
-  async getExamByRoadmapId(roadmapId: string): Promise<Exam> {
+  
+  
+  async getExamByRoadmapId(roadmapId: string): Promise<ExamResponseDto> {
     try {
-      const exams = await this.examModel.aggregate([
-        { $match: { roadmap_ID: roadmapId } },
-        { $unwind: '$round_1' },
-        { $unwind: '$round_2' },
-        { $unwind: '$round_3' },
-        { $sample: { size: 10 } },
-        {
-          $group: {
-            _id: '$_id',
-            roadmap_ID: { $first: '$roadmap_ID' },
-            exam_ID: { $first: '$exam_ID' },
-            exam_title: { $first: '$exam_title' },
-            exam_description: { $first: '$exam_description' },
-            passing_score: { $first: '$passing_score' },
-            exam_time: { $first: '$exam_time' },
-            exam_levels: { $first: '$exam_levels' },
-            tags: { $first: '$tags' },
-            round_1: { $push: '$round_1' },
-            round_2: { $push: '$round_2' },
-            round_3: { $push: '$round_3' },
-          },
-        },
-      ]);
-
-      if (!exams || exams.length === 0) {
-        throw new NotFoundException(
-          `Exam with roadmap_ID ${roadmapId} not found`,
-        );
+      this.logger.log(`Fetching exam for roadmap: ${roadmapId}`);
+      
+      // Step 1: Find the exam by roadmap_ID
+      const exam = await this.examModel.findOne({ roadmap_ID: roadmapId }).exec();
+      if (!exam) {
+        throw new NotFoundException(`Exam with roadmap_ID ${roadmapId} not found`);
       }
 
-      return exams[0];
+      // Step 2: Check if ExamProgress exists for this exam and user
+      let examProgress = await this.examProgressModel.findOne({
+        examId: exam.exam_ID,
+      }).exec();
+
+      // Step 3: Create ExamProgress if it doesn't exist
+      if (!examProgress) {
+        examProgress = new this.examProgressModel({
+          examId: exam.exam_ID,
+          total_questions: this.SAMPLE_QUESTIONS_COUNT,
+          correct_questions: 0,
+          has_started: false,
+          is_completed: false,
+          attempts: 1,
+          highest_percentage: 0,
+          lockUntil: null,
+          lastSubmittedAt: null,
+          attempt_Log: [],
+          answerLog: []
+        });
+        await examProgress.save();
+        this.logger.log(`Created new ExamProgress for exam: ${exam._id}`);
+      }
+
+      // Step 4: Determine which round to use based on attempts
+      const currentAttempt = examProgress.attempts;
+      
+      // Fix: Calculate round index properly to handle cycling through rounds 1, 2, 3
+      let roundIndex: number;
+      if (currentAttempt === 0) {
+        roundIndex = 1; // Default to round 1 if attempts is 0
+      } else {
+        roundIndex = ((currentAttempt - 1) % 3) + 1;
+      }
+      
+      let roundQuestions: any[];
+      let roundName: string;
+      
+      switch (roundIndex) {
+        case 1:
+          roundQuestions = exam.round_1;
+          roundName = 'round_1';
+          break;
+        case 2:
+          roundQuestions = exam.round_2;
+          roundName = 'round_2';
+          break;
+        case 3:
+          roundQuestions = exam.round_3;
+          roundName = 'round_3';
+          break;
+        default:
+          roundQuestions = exam.round_1;
+          roundName = 'round_1';
+      }
+
+      // Step 5: Get 25 random questions from the selected round using aggregation
+      const selectedQuestions = await this.examModel.aggregate([
+        { $match: { _id: exam._id } },
+        { $unwind: `$${roundName}` },
+        { $sample: { size: this.SAMPLE_QUESTIONS_COUNT } },
+        { $replaceRoot: { newRoot: `$${roundName}` } }
+      ]).exec();
+
+      this.logger.log(`Selected ${selectedQuestions.length} questions from ${roundName} for attempt ${currentAttempt}`);
+
+      // Step 6: Prepare response
+      const response: ExamResponseDto = {
+        exam_ID: exam.exam_ID,
+        exam_title: exam.exam_title,
+        exam_description: exam.exam_description,
+        exam_time: exam.exam_time,
+        passing_score: exam.passing_score,
+        exam_levels: exam.exam_levels,
+        tags: exam.tags,
+        round_name: roundName,
+        questions: selectedQuestions
+      };
+
+      return response;
+
     } catch (error) {
-      this.logger.error(
-        `Error retrieving exam for roadmap_ID ${roadmapId}: ${error.message}`,
-        error.stack,
-      );
+      this.logger.error(`Error in getExamByRoadmapIdForUser: ${error.message}`, error.stack);
       if (error instanceof NotFoundException) {
         throw error;
       }
-      throw new InternalServerErrorException('Failed to retrieve exam');
+      throw new InternalServerErrorException('Failed to retrieve exam with user progress');
     }
   }
 
@@ -420,40 +494,52 @@ export class TakeExamService {
     return structuredExam;
   }
 
-  async generateExamWithAI(
-    roadmapId: string,
-    examId: string,
-    roadmapData: RoadmapDataDto,
-  ): Promise<Exam> {
-    try {
-      this.logger.log(`Starting AI-powered exam generation for roadmap: ${roadmapId}`);
+async generateExamWithAI(
+  roadmapId: string,
+  examId: string,
+  roadmapData: RoadmapDataDto,
+): Promise<any> {
+  try {
+    this.logger.log(`Starting AI-powered exam generation for roadmap: ${roadmapId}`);
 
-      // Step 1: Generate raw questions using local generation
-      const rawQuestions = this.generateRawQuestions(roadmapData);
-      this.logger.log(`Generated ${rawQuestions.length} raw questions`);
+    // Step 1: Generate raw questions using local generation
+    const rawQuestions = this.generateRawQuestions(roadmapData);
+    this.logger.log(`Generated ${rawQuestions.length} raw questions`);
 
-      // Step 2: Refine questions to exam structure
-      const examStructure = this.refineQuestionsToExamStructure({
-        roadmapId,
-        examId,
-        roadmapData,
-        rawQuestions,
-      });
+    // Step 2: Refine questions to exam structure
+    const examStructure = this.refineQuestionsToExamStructure({
+      roadmapId,
+      examId,
+      roadmapData,
+      rawQuestions,
+    });
 
-      // Step 3: Enhance questions with Gemini AI (process in batches due to large number of questions)
-      const enhancedExam = await this.enhanceExamWithGemini(examStructure, roadmapData);
-      
-      // Step 4: Create and save exam to database
-      const createdExam = await this.createExam(enhancedExam);
-      
-      this.logger.log(`Successfully created exam with ID: ${createdExam.exam_ID}`);
-      return createdExam;
+    // Step 3: Enhance questions with Gemini AI (process in batches due to large number of questions)
+    const enhancedExam = await this.enhanceExamWithGemini(examStructure, roadmapData);
+    
+    // Step 4: Return exam as JSON response instead of saving to database
+    const examResponse = {
+      roadmap_ID: roadmapId,
+      exam_ID: examId,
+      exam_title: enhancedExam.exam_title,
+      exam_description: enhancedExam.exam_description,
+      exam_levels: enhancedExam.exam_levels,
+      passing_score: enhancedExam.passing_score,
+      exam_time: enhancedExam.exam_time,
+      tags: enhancedExam.tags,
+      round_1: enhancedExam.round_1,
+      round_2: enhancedExam.round_2,
+      round_3: enhancedExam.round_3,
+    };
+    
+    this.logger.log(`Successfully generated exam with ID: ${examResponse.exam_ID}`);
+    return examResponse;
 
-    } catch (error) {
-      this.logger.error(`Error in generateExamWithAI: ${error.message}`, error.stack);
-      throw new InternalServerErrorException('Failed to generate exam with AI');
-    }
+  } catch (error) {
+    this.logger.error(`Error in generateExamWithAI: ${error.message}`, error.stack);
+    throw new InternalServerErrorException('Failed to generate exam with AI');
   }
+}
 
   private async enhanceExamWithGemini(
     examStructure: CreateExamDto,
@@ -588,104 +674,6 @@ Return ONLY a JSON array of enhanced questions maintaining the exact same format
     } catch (error) {
       this.logger.warn(`Failed to parse Gemini batch response: ${error.message}`);
       return originalQuestions;
-    }
-  }
-
-  private createGeminiPrompt(examStructure: CreateExamDto, roadmapData: RoadmapDataDto): string {
-    const topicsContext = roadmapData.modules.map(module => ({
-      module: module.module_title,
-      topics: module.units.flatMap(unit =>
-        unit.subunit.map(sub => sub.read.title)
-      )
-    }));
-
-    return `
-You are an expert educational content creator. I have an exam structure with ${this.TOTAL_QUESTIONS} questions about "${roadmapData.roadmap_title}".
-
-ROADMAP CONTEXT:
-${JSON.stringify(topicsContext, null, 2)}
-
-CURRENT EXAM STRUCTURE:
-- Title: ${examStructure.exam_title}
-- Description: ${examStructure.exam_description}
-- Level: ${examStructure.exam_levels}
-- Total Questions: ${this.TOTAL_QUESTIONS} (${this.QUESTIONS_PER_ROUND} per round)
-
-TASK: Enhance the exam questions to be more educational, accurate, and challenging while maintaining the exact structure.
-
-REQUIREMENTS:
-1. Keep the exact same number of questions (${this.QUESTIONS_PER_ROUND} per round)
-2. Maintain question types: true_false, single_choice, multiple_choice
-3. Ensure questions are directly related to the roadmap topics
-4. Make questions more specific and educational
-5. Improve answer options to be more realistic and challenging
-6. Keep the same JSON structure format
-
-Due to the large number of questions, please focus on improving the overall quality and educational value.
-
-Return the complete enhanced exam structure as valid JSON with the following structure:
-{
-  "exam_title": "...",
-  "exam_description": "...",
-  "round_1": [...],
-  "round_2": [...],
-  "round_3": [...]
-}
-`;
-  }
-
-  private parseGeminiResponse(geminiResponse: string, originalStructure: CreateExamDto): CreateExamDto {
-    try {
-      // Clean the response to extract JSON
-      const jsonMatch = geminiResponse.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
-        throw new Error('No valid JSON found in Gemini response');
-      }
-
-      const enhancedData = JSON.parse(jsonMatch[0]);
-      
-      // Validate the enhanced structure has the required format
-      if (!enhancedData.round_1 || !enhancedData.round_2 || !enhancedData.round_3) {
-        throw new Error('Invalid enhanced structure format');
-      }
-
-      // Validate each round has exactly 300 questions
-      if (enhancedData.round_1.length !== this.QUESTIONS_PER_ROUND || 
-          enhancedData.round_2.length !== this.QUESTIONS_PER_ROUND || 
-          enhancedData.round_3.length !== this.QUESTIONS_PER_ROUND) {
-        throw new Error('Invalid question count in enhanced structure');
-      }
-
-      // Merge enhanced content with original structure
-      const enhancedExam: CreateExamDto = {
-        ...originalStructure,
-        exam_title: enhancedData.exam_title || originalStructure.exam_title,
-        exam_description: enhancedData.exam_description || originalStructure.exam_description,
-        round_1: enhancedData.round_1.map(q => ({
-          question: q.question,
-          question_type: q.question_type,
-          exam_options: q.exam_options,
-          correct_options: q.correct_options
-        })),
-        round_2: enhancedData.round_2.map(q => ({
-          question: q.question,
-          question_type: q.question_type,
-          exam_options: q.exam_options,
-          correct_options: q.correct_options
-        })),
-        round_3: enhancedData.round_3.map(q => ({
-          question: q.question,
-          question_type: q.question_type,
-          exam_options: q.exam_options,
-          correct_options: q.correct_options
-        }))
-      };
-
-      return enhancedExam;
-
-    } catch (error) {
-      this.logger.warn(`Failed to parse Gemini response: ${error.message}`);
-      return originalStructure;
     }
   }
 }
