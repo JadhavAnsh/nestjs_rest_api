@@ -32,10 +32,11 @@ export class ExamProgressService {
 
       const percentage = (correctQuestions / totalQuestions) * 100;
 
-      // Find or create progress document
+      // Find progress document
       let progress = await this.examProgressModel.findOne({ examId }).exec();
 
       if (!progress) {
+        // If no progress found, create new with initial values but do not increment attempts or add to attempt_Log here
         progress = new this.examProgressModel({
           examId,
           total_questions: totalQuestions,
@@ -43,7 +44,7 @@ export class ExamProgressService {
           has_started: true,
           attempts: 0,
           highest_percentage: percentage,
-          attempt_Log: [{ percentage, timestamp: new Date() }],
+          attempt_Log: [],
           lockUntil: null,
           answerLog: [], // Initialize empty answerLog
         });
@@ -59,11 +60,7 @@ export class ExamProgressService {
           progress.highest_percentage = percentage;
         }
 
-        // Add to attempt_Log
-        progress.attempt_Log.push({ percentage, timestamp: new Date() });
-
-        // Increment attempts (optional, as attempt tracking is not used for round selection)
-        progress.attempts = (progress.attempts || 0) + 1;
+        // Do NOT update attempts or attempt_Log here to avoid duplication
       }
 
       const savedProgress = await progress.save();
@@ -84,7 +81,7 @@ export class ExamProgressService {
   examId: string,
   frontendPayload: { quiz_answers: { question: string; answer: string | string[] | boolean }[] },
   backendQuestions: IQuestion[],
-): Promise<ExamProgressDocument> {
+): Promise<any> {
   try {
     // Validate payload structure
     if (!frontendPayload.quiz_answers || !Array.isArray(frontendPayload.quiz_answers)) {
@@ -98,6 +95,9 @@ export class ExamProgressService {
 
     // Initialize or fetch progress
     let progress = await this.examProgressModel.findOne({ examId }).exec();
+    const attemptTimestamp = new Date(); // Capture current timestamp for the attempt
+    console.log(`[${attemptTimestamp.toISOString()}] Starting attempt for examId: ${examId}, current attempts: ${progress?.attempts || 0}`);
+
     if (!progress) {
       progress = new this.examProgressModel({
         examId,
@@ -109,7 +109,9 @@ export class ExamProgressService {
         attempt_Log: [],
         lockUntil: null,
         answerLog: [],
+        lastSubmittedAt: null,
       });
+      console.log(`[${attemptTimestamp.toISOString()}] Created new progress document for examId: ${examId}`);
     } else {
       // Check if exam is locked
       if (progress.lockUntil && progress.lockUntil > new Date()) {
@@ -117,21 +119,15 @@ export class ExamProgressService {
         throw new BadRequestException(`Exam is locked. Please try again in ${remainingTime} hours.`);
       }
 
-      // Check attempt limit
-      if (progress.attempts >= 3) {
-        // Set 8-hour lock
-        progress.lockUntil = new Date(Date.now() + 8 * 60 * 60 * 1000);
-        await progress.save();
-        throw new BadRequestException('Maximum attempts (3) reached. Exam is locked for 8 hours.');
-      }
-
       progress.total_questions = backendQuestions.length;
       // Clear answerLog to ensure latest attempt answers only
       progress.answerLog = [];
+      console.log(`[${attemptTimestamp.toISOString()}] Cleared answerLog for examId: ${examId}`);
     }
 
     // Increment attempt count
     progress.attempts = (progress.attempts || 0) + 1;
+    console.log(`[${attemptTimestamp.toISOString()}] Incremented attempts to: ${progress.attempts}`);
 
     let currentScore = 0; // Reset currentScore for latest attempt
 
@@ -189,7 +185,7 @@ export class ExamProgressService {
         correctAnswer,
         isCorrect,
         timeTaken: 0,
-        timestamp: new Date(),
+        timestamp: attemptTimestamp,
       });
     }
 
@@ -202,27 +198,48 @@ export class ExamProgressService {
       progress.correct_questions = backendQuestions.length;
     }
 
-    // Update lastSubmittedAt timestamp
-    progress.lastSubmittedAt = new Date();
+    // Calculate percentage for the attempt
+    const percentage = (progress.correct_questions / backendQuestions.length) * 100;
 
-    // Update attempt log
+    // Update lastSubmittedAt with the latest attempt timestamp
+    progress.lastSubmittedAt = attemptTimestamp;
+
+    // Update attempt log with percentage and timestamp only to match schema
     progress.attempt_Log.push({
-      attemptNumber: progress.attempts,
-      score: currentScore,
-      timestamp: new Date(),
+      percentage: percentage,
+      timestamp: attemptTimestamp,
     });
+    console.log(`[${attemptTimestamp.toISOString()}] Pushed to attempt_Log: percentage=${percentage}`);
 
-    // Save progress
+    // Update highest_percentage if current percentage is higher
+    if (percentage > progress.highest_percentage) {
+      progress.highest_percentage = percentage;
+    }
+
+    // Apply lock only after 3rd attempt
+    if (progress.attempts >= 3) {
+      progress.lockUntil = new Date(Date.now() + 8 * 60 * 60 * 1000); // Set 8-hour lock
+      console.log(`[${attemptTimestamp.toISOString()}] Lock applied for 8 hours, lockUntil: ${progress.lockUntil}`);
+    }
+
+    // Save progress (only once)
     await progress.save();
+    console.log(`[${attemptTimestamp.toISOString()}] Progress saved for examId: ${examId}`);
 
-    // Calculate and return progress
-    return await this.calculateProgress(
+    // Calculate progress summary without modifying attempts or attempt_Log
+    const examProgress = await this.calculateProgress(
       examId,
       backendQuestions.length,
       progress.correct_questions,
     );
+
+    // Convert Mongoose document to plain object and return response with lastSubmittedAt
+    return {
+      ...examProgress.toObject(),
+      lastSubmittedAt: progress.lastSubmittedAt,
+    };
   } catch (error) {
-    console.error('Error in submitAnswer:', error);
+    console.error(`[${new Date().toISOString()}] Error in submitAnswer:`, error);
     if (error instanceof NotFoundException || error instanceof BadRequestException) {
       throw error;
     }
