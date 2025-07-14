@@ -111,10 +111,27 @@ export class ExamProgressService {
         answerLog: [],
       });
     } else {
+      // Check if exam is locked
+      if (progress.lockUntil && progress.lockUntil > new Date()) {
+        const remainingTime = Math.ceil((progress.lockUntil.getTime() - new Date().getTime()) / (1000 * 60 * 60));
+        throw new BadRequestException(`Exam is locked. Please try again in ${remainingTime} hours.`);
+      }
+
+      // Check attempt limit
+      if (progress.attempts >= 3) {
+        // Set 8-hour lock
+        progress.lockUntil = new Date(Date.now() + 8 * 60 * 60 * 1000);
+        await progress.save();
+        throw new BadRequestException('Maximum attempts (3) reached. Exam is locked for 8 hours.');
+      }
+
       progress.total_questions = backendQuestions.length;
       // Clear answerLog to ensure latest attempt answers only
       progress.answerLog = [];
     }
+
+    // Increment attempt count
+    progress.attempts = (progress.attempts || 0) + 1;
 
     let currentScore = 0; // Reset currentScore for latest attempt
 
@@ -187,6 +204,13 @@ export class ExamProgressService {
 
     // Update lastSubmittedAt timestamp
     progress.lastSubmittedAt = new Date();
+
+    // Update attempt log
+    progress.attempt_Log.push({
+      attemptNumber: progress.attempts,
+      score: currentScore,
+      timestamp: new Date(),
+    });
 
     // Save progress
     await progress.save();
