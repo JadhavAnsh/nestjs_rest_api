@@ -12,7 +12,10 @@ import { ExamLevel } from 'src/common/enum/exam-level.enum';
 import { QuestionType } from 'src/common/enum/question-type.enum';
 import { CreateExamDto, RoadmapDataDto } from './dto/create-exam.dto';
 import { CreateQuestionDto } from './dto/create-question.dto';
-import { ExamProgress, ExamProgressDocument } from './schema/exam-progress.schema';
+import {
+  ExamProgress,
+  ExamProgressDocument,
+} from './schema/exam-progress.schema';
 import { Exam } from './schema/exam.schema';
 
 export interface ExamResponseDto {
@@ -27,12 +30,11 @@ export interface ExamResponseDto {
   questions: any[];
 }
 
-
 @Injectable()
 export class TakeExamService {
   private readonly logger = new Logger(TakeExamService.name);
   private readonly genAI: GoogleGenerativeAI;
-  
+
   // Updated constants for 300 questions per round
   private readonly QUESTIONS_PER_TYPE_PER_ROUND = 100; // 100 of each type per round
   private readonly TOTAL_QUESTIONS = 900; // 3 rounds × 300 questions
@@ -41,7 +43,8 @@ export class TakeExamService {
 
   constructor(
     @InjectModel(Exam.name) private readonly examModel: Model<Exam>,
-    @InjectModel(ExamProgress.name) private readonly examProgressModel: Model<ExamProgressDocument>,
+    @InjectModel(ExamProgress.name)
+    private readonly examProgressModel: Model<ExamProgressDocument>,
   ) {
     if (!process.env.GEMINI_API_KEY) {
       this.logger.error('GEMINI_API_KEY is not set in environment variables');
@@ -49,7 +52,7 @@ export class TakeExamService {
     }
     this.genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
   }
-//for getting the exam Data , to submit the
+  //for getting the exam Data , to submit the
   async findExamById(examId: string): Promise<Exam> {
     try {
       const isObjectId = /^[0-9a-fA-F]{24}$/.test(examId);
@@ -71,22 +74,27 @@ export class TakeExamService {
       throw new InternalServerErrorException('Failed to retrieve exam');
     }
   }
-  
-  
+
   async getExamByRoadmapId(roadmapId: string): Promise<ExamResponseDto> {
     try {
       this.logger.log(`Fetching exam for roadmap: ${roadmapId}`);
-      
+
       // Step 1: Find the exam by roadmap_ID
-      const exam = await this.examModel.findOne({ roadmap_ID: roadmapId }).exec();
+      const exam = await this.examModel
+        .findOne({ roadmap_ID: roadmapId })
+        .exec();
       if (!exam) {
-        throw new NotFoundException(`Exam with roadmap_ID ${roadmapId} not found`);
+        throw new NotFoundException(
+          `Exam with roadmap_ID ${roadmapId} not found`,
+        );
       }
 
       // Step 2: Check if ExamProgress exists for this exam and user
-      let examProgress = await this.examProgressModel.findOne({
-        examId: exam.exam_ID,
-      }).exec();
+      let examProgress = await this.examProgressModel
+        .findOne({
+          examId: exam.exam_ID,
+        })
+        .exec();
 
       // Step 3: Create ExamProgress if it doesn't exist
       if (!examProgress) {
@@ -101,7 +109,7 @@ export class TakeExamService {
           lockUntil: null,
           lastSubmittedAt: null,
           attempt_Log: [],
-          answerLog: []
+          answerLog: [],
         });
         await examProgress.save();
         this.logger.log(`Created new ExamProgress for exam: ${exam._id}`);
@@ -109,7 +117,7 @@ export class TakeExamService {
 
       // Step 4: Determine which round to use based on attempts
       const currentAttempt = examProgress.attempts;
-      
+
       // Fix: Calculate round index properly to handle cycling through rounds 1, 2, 3
       let roundIndex: number;
       if (currentAttempt === 0) {
@@ -117,10 +125,10 @@ export class TakeExamService {
       } else {
         roundIndex = ((currentAttempt - 1) % 3) + 1;
       }
-      
+
       let roundQuestions: any[];
       let roundName: string;
-      
+
       switch (roundIndex) {
         case 1:
           roundQuestions = exam.round_1;
@@ -140,14 +148,18 @@ export class TakeExamService {
       }
 
       // Step 5: Get 25 random questions from the selected round using aggregation
-      const selectedQuestions = await this.examModel.aggregate([
-        { $match: { _id: exam._id } },
-        { $unwind: `$${roundName}` },
-        { $sample: { size: this.SAMPLE_QUESTIONS_COUNT } },
-        { $replaceRoot: { newRoot: `$${roundName}` } }
-      ]).exec();
+      const selectedQuestions = await this.examModel
+        .aggregate([
+          { $match: { _id: exam._id } },
+          { $unwind: `$${roundName}` },
+          { $sample: { size: this.SAMPLE_QUESTIONS_COUNT } },
+          { $replaceRoot: { newRoot: `$${roundName}` } },
+        ])
+        .exec();
 
-      this.logger.log(`Selected ${selectedQuestions.length} questions from ${roundName} for attempt ${currentAttempt}`);
+      this.logger.log(
+        `Selected ${selectedQuestions.length} questions from ${roundName} for attempt ${currentAttempt}`,
+      );
 
       // Step 6: Prepare response
       const response: ExamResponseDto = {
@@ -159,17 +171,21 @@ export class TakeExamService {
         exam_levels: exam.exam_levels,
         tags: exam.tags,
         round_name: roundName,
-        questions: selectedQuestions
+        questions: selectedQuestions,
       };
 
       return response;
-
     } catch (error) {
-      this.logger.error(`Error in getExamByRoadmapIdForUser: ${error.message}`, error.stack);
+      this.logger.error(
+        `Error in getExamByRoadmapIdForUser: ${error.message}`,
+        error.stack,
+      );
       if (error instanceof NotFoundException) {
         throw error;
       }
-      throw new InternalServerErrorException('Failed to retrieve exam with user progress');
+      throw new InternalServerErrorException(
+        'Failed to retrieve exam with user progress',
+      );
     }
   }
 
@@ -222,15 +238,17 @@ export class TakeExamService {
     }
   }
 
-  private generateRawQuestions(roadmapData: RoadmapDataDto): CreateQuestionDto[] {
+  private generateRawQuestions(
+    roadmapData: RoadmapDataDto,
+  ): CreateQuestionDto[] {
     const questions: CreateQuestionDto[] = [];
-    
+
     // Extract all topics from roadmap data
     const topics: string[] = [];
-    roadmapData.modules.forEach(module => {
+    roadmapData.modules.forEach((module) => {
       topics.push(module.module_title);
-      module.units.forEach(unit => {
-        unit.subunit.forEach(subunit => {
+      module.units.forEach((unit) => {
+        unit.subunit.forEach((subunit) => {
           topics.push(subunit.read.title);
         });
       });
@@ -239,21 +257,30 @@ export class TakeExamService {
     // Generate 300 true/false questions (100 per round)
     for (let i = 0; i < 300; i++) {
       const topic = topics[i % topics.length];
-      const question = this.generateTrueFalseQuestion(topic, roadmapData.roadmap_title);
+      const question = this.generateTrueFalseQuestion(
+        topic,
+        roadmapData.roadmap_title,
+      );
       questions.push(question);
     }
 
     // Generate 300 single choice questions (100 per round)
     for (let i = 0; i < 300; i++) {
       const topic = topics[i % topics.length];
-      const question = this.generateSingleChoiceQuestion(topic, roadmapData.roadmap_title);
+      const question = this.generateSingleChoiceQuestion(
+        topic,
+        roadmapData.roadmap_title,
+      );
       questions.push(question);
     }
 
     // Generate 300 multiple choice questions (100 per round)
     for (let i = 0; i < 300; i++) {
       const topic = topics[i % topics.length];
-      const question = this.generateMultipleChoiceQuestion(topic, roadmapData.roadmap_title);
+      const question = this.generateMultipleChoiceQuestion(
+        topic,
+        roadmapData.roadmap_title,
+      );
       questions.push(question);
     }
 
@@ -264,7 +291,10 @@ export class TakeExamService {
     return shuffledQuestions;
   }
 
-  private generateTrueFalseQuestion(topic: string, roadmapTitle: string): CreateQuestionDto {
+  private generateTrueFalseQuestion(
+    topic: string,
+    roadmapTitle: string,
+  ): CreateQuestionDto {
     const statements = [
       `${topic} is a fundamental concept in ${roadmapTitle}`,
       `Understanding ${topic} is essential for mastering ${roadmapTitle}`,
@@ -280,21 +310,24 @@ export class TakeExamService {
       `${topic} focuses on theoretical concepts rather than practical skills`,
       `${topic} is primarily concerned with debugging techniques`,
       `${topic} emphasizes best practices and industry standards`,
-      `${topic} involves collaborative development methodologies`
+      `${topic} involves collaborative development methodologies`,
     ];
 
     const statement = statements[Math.floor(Math.random() * statements.length)];
     const isTrue = Math.random() > 0.5;
-    
+
     return {
       question: isTrue ? statement : `${statement} (This is incorrect)`,
       question_type: QuestionType.TRUE_FALSE,
-      exam_options: ["True", "False"],
-      correct_options: isTrue ? 0 : 1
+      exam_options: ['True', 'False'],
+      correct_options: isTrue ? 0 : 1,
     };
   }
 
-  private generateSingleChoiceQuestion(topic: string, roadmapTitle: string): CreateQuestionDto {
+  private generateSingleChoiceQuestion(
+    topic: string,
+    roadmapTitle: string,
+  ): CreateQuestionDto {
     const questions = [
       `What is the primary purpose of ${topic}?`,
       `Which of the following best describes ${topic}?`,
@@ -310,7 +343,7 @@ export class TakeExamService {
       `How does ${topic} improve development efficiency?`,
       `What is the relationship between ${topic} and system architecture?`,
       `Which tool is most commonly used with ${topic}?`,
-      `What performance considerations apply to ${topic}?`
+      `What performance considerations apply to ${topic}?`,
     ];
 
     const question = questions[Math.floor(Math.random() * questions.length)];
@@ -321,9 +354,9 @@ export class TakeExamService {
       `${topic} offers robust solutions for common problems`,
       `${topic} integrates seamlessly with other components`,
       `${topic} follows industry-standard conventions`,
-      `${topic} supports modern development practices`
+      `${topic} supports modern development practices`,
     ];
-    
+
     const wrongAnswers = [
       `${topic} is primarily used for database management`,
       `${topic} is only relevant for advanced users`,
@@ -331,12 +364,13 @@ export class TakeExamService {
       `${topic} requires expensive third-party licenses`,
       `${topic} is incompatible with modern frameworks`,
       `${topic} has limited practical applications`,
-      `${topic} is purely theoretical with no real-world use`
+      `${topic} is purely theoretical with no real-world use`,
     ];
 
-    const correctAnswer = correctAnswers[Math.floor(Math.random() * correctAnswers.length)];
+    const correctAnswer =
+      correctAnswers[Math.floor(Math.random() * correctAnswers.length)];
     const selectedWrongAnswers = this.shuffleArray(wrongAnswers).slice(0, 3);
-    
+
     const options = [correctAnswer, ...selectedWrongAnswers];
     const shuffledOptions = this.shuffleArray(options);
     const correctIndex = shuffledOptions.indexOf(correctAnswer);
@@ -345,11 +379,14 @@ export class TakeExamService {
       question,
       question_type: QuestionType.SINGLE_CHOICE,
       exam_options: shuffledOptions,
-      correct_options: correctIndex
+      correct_options: correctIndex,
     };
   }
 
-  private generateMultipleChoiceQuestion(topic: string, roadmapTitle: string): CreateQuestionDto {
+  private generateMultipleChoiceQuestion(
+    topic: string,
+    roadmapTitle: string,
+  ): CreateQuestionDto {
     const questions = [
       `Which of the following are key aspects of ${topic}? (Select 2)`,
       `What are the main benefits of understanding ${topic}? (Select 2)`,
@@ -360,7 +397,7 @@ export class TakeExamService {
       `Which skills are developed through ${topic}? (Select 2)`,
       `What are the key advantages of ${topic}? (Select 2)`,
       `Which principles are fundamental to ${topic}? (Select 2)`,
-      `What are the main features of ${topic}? (Select 2)`
+      `What are the main features of ${topic}? (Select 2)`,
     ];
 
     const question = questions[Math.floor(Math.random() * questions.length)];
@@ -372,9 +409,9 @@ export class TakeExamService {
       `${topic} supports scalable application architecture`,
       `${topic} enables efficient problem-solving approaches`,
       `${topic} provides industry-standard implementation patterns`,
-      `${topic} ensures robust error handling and debugging`
+      `${topic} ensures robust error handling and debugging`,
     ];
-    
+
     const wrongAnswers = [
       `${topic} is only used in legacy systems`,
       `${topic} requires expensive third-party tools`,
@@ -383,21 +420,26 @@ export class TakeExamService {
       `${topic} increases development complexity unnecessarily`,
       `${topic} has poor documentation and community support`,
       `${topic} is primarily for academic purposes only`,
-      `${topic} lacks industry adoption and support`
+      `${topic} lacks industry adoption and support`,
     ];
 
-    const selectedCorrectAnswers = this.shuffleArray(correctAnswers).slice(0, 2);
+    const selectedCorrectAnswers = this.shuffleArray(correctAnswers).slice(
+      0,
+      2,
+    );
     const selectedWrongAnswers = this.shuffleArray(wrongAnswers).slice(0, 2);
-    
+
     const options = [...selectedCorrectAnswers, ...selectedWrongAnswers];
     const shuffledOptions = this.shuffleArray(options);
-    const correctIndices = selectedCorrectAnswers.map(answer => shuffledOptions.indexOf(answer));
+    const correctIndices = selectedCorrectAnswers.map((answer) =>
+      shuffledOptions.indexOf(answer),
+    );
 
     return {
       question,
       question_type: QuestionType.MULTIPLE_CHOICE,
       exam_options: shuffledOptions,
-      correct_options: correctIndices
+      correct_options: correctIndices,
     };
   }
 
@@ -412,9 +454,12 @@ export class TakeExamService {
 
   private determineExamLevel(roadmapData: RoadmapDataDto): ExamLevel {
     const totalUnits = roadmapData.modules.reduce((total, module) => {
-      return total + module.units.reduce((unitTotal, unit) => {
-        return unitTotal + unit.subunit.length;
-      }, 0);
+      return (
+        total +
+        module.units.reduce((unitTotal, unit) => {
+          return unitTotal + unit.subunit.length;
+        }, 0)
+      );
     }, 0);
 
     // Determine level based on complexity
@@ -436,31 +481,57 @@ export class TakeExamService {
     const { roadmapId, examId, roadmapData, rawQuestions } = params;
 
     if (rawQuestions.length !== this.TOTAL_QUESTIONS) {
-      throw new Error(`Expected ${this.TOTAL_QUESTIONS} questions, received ${rawQuestions.length}`);
+      throw new Error(
+        `Expected ${this.TOTAL_QUESTIONS} questions, received ${rawQuestions.length}`,
+      );
     }
 
     // Group questions by type
-    const trueFalseQuestions = rawQuestions.filter(q => q.question_type === QuestionType.TRUE_FALSE);
-    const singleChoiceQuestions = rawQuestions.filter(q => q.question_type === QuestionType.SINGLE_CHOICE);
-    const multipleChoiceQuestions = rawQuestions.filter(q => q.question_type === QuestionType.MULTIPLE_CHOICE);
+    const trueFalseQuestions = rawQuestions.filter(
+      (q) => q.question_type === QuestionType.TRUE_FALSE,
+    );
+    const singleChoiceQuestions = rawQuestions.filter(
+      (q) => q.question_type === QuestionType.SINGLE_CHOICE,
+    );
+    const multipleChoiceQuestions = rawQuestions.filter(
+      (q) => q.question_type === QuestionType.MULTIPLE_CHOICE,
+    );
 
     // Distribute questions evenly across rounds (100 of each type per round)
     const round_1: CreateQuestionDto[] = [
       ...trueFalseQuestions.slice(0, this.QUESTIONS_PER_TYPE_PER_ROUND),
       ...singleChoiceQuestions.slice(0, this.QUESTIONS_PER_TYPE_PER_ROUND),
-      ...multipleChoiceQuestions.slice(0, this.QUESTIONS_PER_TYPE_PER_ROUND)
+      ...multipleChoiceQuestions.slice(0, this.QUESTIONS_PER_TYPE_PER_ROUND),
     ];
 
     const round_2: CreateQuestionDto[] = [
-      ...trueFalseQuestions.slice(this.QUESTIONS_PER_TYPE_PER_ROUND, this.QUESTIONS_PER_TYPE_PER_ROUND * 2),
-      ...singleChoiceQuestions.slice(this.QUESTIONS_PER_TYPE_PER_ROUND, this.QUESTIONS_PER_TYPE_PER_ROUND * 2),
-      ...multipleChoiceQuestions.slice(this.QUESTIONS_PER_TYPE_PER_ROUND, this.QUESTIONS_PER_TYPE_PER_ROUND * 2)
+      ...trueFalseQuestions.slice(
+        this.QUESTIONS_PER_TYPE_PER_ROUND,
+        this.QUESTIONS_PER_TYPE_PER_ROUND * 2,
+      ),
+      ...singleChoiceQuestions.slice(
+        this.QUESTIONS_PER_TYPE_PER_ROUND,
+        this.QUESTIONS_PER_TYPE_PER_ROUND * 2,
+      ),
+      ...multipleChoiceQuestions.slice(
+        this.QUESTIONS_PER_TYPE_PER_ROUND,
+        this.QUESTIONS_PER_TYPE_PER_ROUND * 2,
+      ),
     ];
 
     const round_3: CreateQuestionDto[] = [
-      ...trueFalseQuestions.slice(this.QUESTIONS_PER_TYPE_PER_ROUND * 2, this.QUESTIONS_PER_TYPE_PER_ROUND * 3),
-      ...singleChoiceQuestions.slice(this.QUESTIONS_PER_TYPE_PER_ROUND * 2, this.QUESTIONS_PER_TYPE_PER_ROUND * 3),
-      ...multipleChoiceQuestions.slice(this.QUESTIONS_PER_TYPE_PER_ROUND * 2, this.QUESTIONS_PER_TYPE_PER_ROUND * 3)
+      ...trueFalseQuestions.slice(
+        this.QUESTIONS_PER_TYPE_PER_ROUND * 2,
+        this.QUESTIONS_PER_TYPE_PER_ROUND * 3,
+      ),
+      ...singleChoiceQuestions.slice(
+        this.QUESTIONS_PER_TYPE_PER_ROUND * 2,
+        this.QUESTIONS_PER_TYPE_PER_ROUND * 3,
+      ),
+      ...multipleChoiceQuestions.slice(
+        this.QUESTIONS_PER_TYPE_PER_ROUND * 2,
+        this.QUESTIONS_PER_TYPE_PER_ROUND * 3,
+      ),
     ];
 
     // Shuffle each round for variety
@@ -471,8 +542,8 @@ export class TakeExamService {
     // Generate tags from roadmap data
     const tags = [
       roadmapData.roadmap_title,
-      ...roadmapData.modules.slice(0, 3).map(module => module.module_title)
-    ].filter(tag => tag && tag.length > 0);
+      ...roadmapData.modules.slice(0, 3).map((module) => module.module_title),
+    ].filter((tag) => tag && tag.length > 0);
 
     // Determine exam level based on roadmap complexity
     const examLevel = this.determineExamLevel(roadmapData);
@@ -488,85 +559,112 @@ export class TakeExamService {
       tags,
       round_1: shuffledRound1,
       round_2: shuffledRound2,
-      round_3: shuffledRound3
+      round_3: shuffledRound3,
     };
 
     return structuredExam;
   }
 
-async generateExamWithAI(
-  roadmapId: string,
-  examId: string,
-  roadmapData: RoadmapDataDto,
-): Promise<any> {
-  try {
-    this.logger.log(`Starting AI-powered exam generation for roadmap: ${roadmapId}`);
+  async generateExamWithAI(
+    roadmapId: string,
+    examId: string,
+    roadmapData: RoadmapDataDto,
+  ): Promise<any> {
+    try {
+      this.logger.log(
+        `Starting AI-powered exam generation for roadmap: ${roadmapId}`,
+      );
 
-    // Step 1: Generate raw questions using local generation
-    const rawQuestions = this.generateRawQuestions(roadmapData);
-    this.logger.log(`Generated ${rawQuestions.length} raw questions`);
+      // Step 1: Generate raw questions using local generation
+      const rawQuestions = this.generateRawQuestions(roadmapData);
+      this.logger.log(`Generated ${rawQuestions.length} raw questions`);
 
-    // Step 2: Refine questions to exam structure
-    const examStructure = this.refineQuestionsToExamStructure({
-      roadmapId,
-      examId,
-      roadmapData,
-      rawQuestions,
-    });
+      // Step 2: Refine questions to exam structure
+      const examStructure = this.refineQuestionsToExamStructure({
+        roadmapId,
+        examId,
+        roadmapData,
+        rawQuestions,
+      });
 
-    // Step 3: Enhance questions with Gemini AI (process in batches due to large number of questions)
-    const enhancedExam = await this.enhanceExamWithGemini(examStructure, roadmapData);
-    
-    // Step 4: Return exam as JSON response instead of saving to database
-    const examResponse = {
-      roadmap_ID: roadmapId,
-      exam_ID: examId,
-      exam_title: enhancedExam.exam_title,
-      exam_description: enhancedExam.exam_description,
-      exam_levels: enhancedExam.exam_levels,
-      passing_score: enhancedExam.passing_score,
-      exam_time: enhancedExam.exam_time,
-      tags: enhancedExam.tags,
-      round_1: enhancedExam.round_1,
-      round_2: enhancedExam.round_2,
-      round_3: enhancedExam.round_3,
-    };
-    
-    this.logger.log(`Successfully generated exam with ID: ${examResponse.exam_ID}`);
-    return examResponse;
+      // Step 3: Enhance questions with Gemini AI (process in batches due to large number of questions)
+      const enhancedExam = await this.enhanceExamWithGemini(
+        examStructure,
+        roadmapData,
+      );
 
-  } catch (error) {
-    this.logger.error(`Error in generateExamWithAI: ${error.message}`, error.stack);
-    throw new InternalServerErrorException('Failed to generate exam with AI');
+      // Step 4: Return exam as JSON response instead of saving to database
+      const examResponse = {
+        roadmap_ID: roadmapId,
+        exam_ID: examId,
+        exam_title: enhancedExam.exam_title,
+        exam_description: enhancedExam.exam_description,
+        exam_levels: enhancedExam.exam_levels,
+        passing_score: enhancedExam.passing_score,
+        exam_time: enhancedExam.exam_time,
+        tags: enhancedExam.tags,
+        round_1: enhancedExam.round_1,
+        round_2: enhancedExam.round_2,
+        round_3: enhancedExam.round_3,
+      };
+
+      this.logger.log(
+        `Successfully generated exam with ID: ${examResponse.exam_ID}`,
+      );
+      return examResponse;
+    } catch (error) {
+      this.logger.error(
+        `Error in generateExamWithAI: ${error.message}`,
+        error.stack,
+      );
+      throw new InternalServerErrorException('Failed to generate exam with AI');
+    }
   }
-}
 
   private async enhanceExamWithGemini(
     examStructure: CreateExamDto,
     roadmapData: RoadmapDataDto,
   ): Promise<CreateExamDto> {
     try {
-      const model = this.genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+      const model = this.genAI.getGenerativeModel({
+        model: 'gemini-1.5-flash',
+      });
 
       // Process each round separately due to the large number of questions
       const enhancedRounds = await Promise.all([
-        this.enhanceRoundWithGemini(model, examStructure.round_1, roadmapData, 1),
-        this.enhanceRoundWithGemini(model, examStructure.round_2, roadmapData, 2),
-        this.enhanceRoundWithGemini(model, examStructure.round_3, roadmapData, 3)
+        this.enhanceRoundWithGemini(
+          model,
+          examStructure.round_1,
+          roadmapData,
+          1,
+        ),
+        this.enhanceRoundWithGemini(
+          model,
+          examStructure.round_2,
+          roadmapData,
+          2,
+        ),
+        this.enhanceRoundWithGemini(
+          model,
+          examStructure.round_3,
+          roadmapData,
+          3,
+        ),
       ]);
 
       const enhancedExam: CreateExamDto = {
         ...examStructure,
         round_1: enhancedRounds[0],
         round_2: enhancedRounds[1],
-        round_3: enhancedRounds[2]
+        round_3: enhancedRounds[2],
       };
-      
+
       this.logger.log('Successfully enhanced exam with Gemini AI');
       return enhancedExam;
-
     } catch (error) {
-      this.logger.warn(`Gemini enhancement failed, using original structure: ${error.message}`);
+      this.logger.warn(
+        `Gemini enhancement failed, using original structure: ${error.message}`,
+      );
       // Fallback to original structure if AI enhancement fails
       return examStructure;
     }
@@ -576,7 +674,7 @@ async generateExamWithAI(
     model: any,
     roundQuestions: CreateQuestionDto[],
     roadmapData: RoadmapDataDto,
-    roundNumber: number
+    roundNumber: number,
   ): Promise<CreateQuestionDto[]> {
     try {
       // Process questions in smaller batches to avoid token limits
@@ -585,21 +683,31 @@ async generateExamWithAI(
 
       for (let i = 0; i < roundQuestions.length; i += batchSize) {
         const batch = roundQuestions.slice(i, i + batchSize);
-        const prompt = this.createGeminiBatchPrompt(batch, roadmapData, roundNumber, i / batchSize + 1);
-        
+        const prompt = this.createGeminiBatchPrompt(
+          batch,
+          roadmapData,
+          roundNumber,
+          i / batchSize + 1,
+        );
+
         const result = await model.generateContent(prompt);
         const response = await result.response;
-        const enhancedBatch = this.parseGeminiBatchResponse(response.text(), batch);
-        
+        const enhancedBatch = this.parseGeminiBatchResponse(
+          response.text(),
+          batch,
+        );
+
         enhancedQuestions.push(...enhancedBatch);
-        
+
         // Small delay to respect rate limits
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise((resolve) => setTimeout(resolve, 100));
       }
 
       return enhancedQuestions;
     } catch (error) {
-      this.logger.warn(`Failed to enhance round ${roundNumber}: ${error.message}`);
+      this.logger.warn(
+        `Failed to enhance round ${roundNumber}: ${error.message}`,
+      );
       return roundQuestions;
     }
   }
@@ -608,13 +716,13 @@ async generateExamWithAI(
     questions: CreateQuestionDto[],
     roadmapData: RoadmapDataDto,
     roundNumber: number,
-    batchNumber: number
+    batchNumber: number,
   ): string {
-    const topicsContext = roadmapData.modules.map(module => ({
+    const topicsContext = roadmapData.modules.map((module) => ({
       module: module.module_title,
-      topics: module.units.flatMap(unit =>
-        unit.subunit.map(sub => sub.read.title)
-      )
+      topics: module.units.flatMap((unit) =>
+        unit.subunit.map((sub) => sub.read.title),
+      ),
     }));
 
     return `
@@ -649,7 +757,10 @@ Return ONLY a JSON array of enhanced questions maintaining the exact same format
 `;
   }
 
-  private parseGeminiBatchResponse(geminiResponse: string, originalQuestions: CreateQuestionDto[]): CreateQuestionDto[] {
+  private parseGeminiBatchResponse(
+    geminiResponse: string,
+    originalQuestions: CreateQuestionDto[],
+  ): CreateQuestionDto[] {
     try {
       // Clean the response to extract JSON
       const jsonMatch = geminiResponse.match(/\[[\s\S]*\]/);
@@ -658,21 +769,29 @@ Return ONLY a JSON array of enhanced questions maintaining the exact same format
       }
 
       const enhancedQuestions = JSON.parse(jsonMatch[0]);
-      
+
       // Validate the enhanced questions
-      if (!Array.isArray(enhancedQuestions) || enhancedQuestions.length !== originalQuestions.length) {
+      if (
+        !Array.isArray(enhancedQuestions) ||
+        enhancedQuestions.length !== originalQuestions.length
+      ) {
         throw new Error('Invalid enhanced questions format or count');
       }
 
       return enhancedQuestions.map((q, index) => ({
         question: q.question || originalQuestions[index].question,
-        question_type: q.question_type || originalQuestions[index].question_type,
+        question_type:
+          q.question_type || originalQuestions[index].question_type,
         exam_options: q.exam_options || originalQuestions[index].exam_options,
-        correct_options: q.correct_options !== undefined ? q.correct_options : originalQuestions[index].correct_options
+        correct_options:
+          q.correct_options !== undefined
+            ? q.correct_options
+            : originalQuestions[index].correct_options,
       }));
-
     } catch (error) {
-      this.logger.warn(`Failed to parse Gemini batch response: ${error.message}`);
+      this.logger.warn(
+        `Failed to parse Gemini batch response: ${error.message}`,
+      );
       return originalQuestions;
     }
   }
