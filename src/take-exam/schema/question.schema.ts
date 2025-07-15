@@ -4,7 +4,7 @@ import { QuestionType } from 'src/common/enum/question-type.enum';
 
 export type QuestionDocument = HydratedDocument<Question>;
 
-@Schema({ _id: false })
+@Schema({ _id: true })
 export class Question {
   @Prop({ required: true, trim: true, minlength: 1 })
   question: string;
