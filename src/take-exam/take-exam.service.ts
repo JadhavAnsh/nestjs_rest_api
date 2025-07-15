@@ -517,7 +517,7 @@ async generateExamWithAI(
     // Step 3: Enhance questions with Gemini AI (process in batches due to large number of questions)
     const enhancedExam = await this.enhanceExamWithGemini(examStructure, roadmapData);
     
-    // Step 4: Return exam as JSON response instead of saving to database
+    // Step 4: Store exam response in variable and pass to createExam function
     const examResponse = {
       roadmap_ID: roadmapId,
       exam_ID: examId,
@@ -532,8 +532,11 @@ async generateExamWithAI(
       round_3: enhancedExam.round_3,
     };
     
-    this.logger.log(`Successfully generated exam with ID: ${examResponse.exam_ID}`);
-    return examResponse;
+    // Store the exam in the database using createExam function
+    const createdExam = await this.createExam(examResponse);
+    
+    this.logger.log(`Successfully generated and stored exam with ID: ${examResponse.exam_ID}`);
+    return createdExam;
 
   } catch (error) {
     this.logger.error(`Error in generateExamWithAI: ${error.message}`, error.stack);

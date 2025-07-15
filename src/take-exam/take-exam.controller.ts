@@ -4,6 +4,7 @@ import {
   Get,
   HttpException,
   HttpStatus,
+  InternalServerErrorException,
   Logger,
   NotFoundException,
   Param,
@@ -64,22 +65,28 @@ export class TakeExamController {
         `Received exam generation request for roadmap: ${generateExamDto.roadmapId}`,
       );
 
-      // Generate exam with AI enhancement
+      // Generate exam with AI enhancement and store in database
       const generatedExam = await this.takeExamService.generateExamWithAI(
         generateExamDto.roadmapId,
         generateExamDto.examId,
         generateExamDto.roadmapData,
       );
 
-      return generatedExam;
+      this.logger.log(
+        `Successfully generated and stored exam with ID: ${generateExamDto.examId}`,
+      );
+
+      return {
+        message: 'Exam generated and stored successfully',
+        exam: generatedExam,
+      };
     } catch (error) {
       this.logger.error(`Error generating exam: ${error.message}`, error.stack);
 
-      return {
-        success: false,
+      throw new InternalServerErrorException({
         message: 'Failed to generate exam',
         error: error.message,
-      };
+      });
     }
   }
 
