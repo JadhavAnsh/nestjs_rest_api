@@ -12,8 +12,8 @@ export class ExamProgress extends Document {
   @Prop({ required: true })
   correct_questions: number;
 
-  @Prop({ type: Boolean, default: false })
-  has_started: boolean;
+  // @Prop({ type: Boolean, default: false })
+  // has_started: boolean;
 
   @Prop({ type: Boolean, default: false })
   is_completed: boolean;

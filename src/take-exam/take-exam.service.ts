@@ -112,7 +112,7 @@ export class TakeExamService {
           answerLog: [],
         });
         await examProgress.save();
-        this.logger.log(`Created new ExamProgress for exam: ${exam._id}`);
+        this.logger.log(`Created new ExamProgress for exam: ${exam.exam_ID}`);
       }
 
       // Step 4: Determine which round to use based on attempts
@@ -587,39 +587,34 @@ export class TakeExamService {
         rawQuestions,
       });
 
-      // Step 3: Enhance questions with Gemini AI (process in batches due to large number of questions)
-      const enhancedExam = await this.enhanceExamWithGemini(
-        examStructure,
-        roadmapData,
-      );
+    // Step 3: Enhance questions with Gemini AI (process in batches due to large number of questions)
+    const enhancedExam = await this.enhanceExamWithGemini(examStructure, roadmapData);
 
-      // Step 4: Return exam as JSON response instead of saving to database
-      const examResponse = {
-        roadmap_ID: roadmapId,
-        exam_ID: examId,
-        exam_title: enhancedExam.exam_title,
-        exam_description: enhancedExam.exam_description,
-        exam_levels: enhancedExam.exam_levels,
-        passing_score: enhancedExam.passing_score,
-        exam_time: enhancedExam.exam_time,
-        tags: enhancedExam.tags,
-        round_1: enhancedExam.round_1,
-        round_2: enhancedExam.round_2,
-        round_3: enhancedExam.round_3,
-      };
+    const createExamResponse = await this.createExam(enhancedExam);
+    
+    // Step 4: Return exam as JSON response instead of saving to database
+    // const examResponse = {
+    //   roadmap_ID: roadmapId,
+    //   exam_ID: examId,
+    //   exam_title: enhancedExam.exam_title,
+    //   exam_description: enhancedExam.exam_description,
+    //   exam_levels: enhancedExam.exam_levels,
+    //   passing_score: enhancedExam.passing_score,
+    //   exam_time: enhancedExam.exam_time,
+    //   tags: enhancedExam.tags,
+    //   round_1: enhancedExam.round_1,
+    //   round_2: enhancedExam.round_2,
+    //   round_3: enhancedExam.round_3,
+    // };
+    
+    this.logger.log(`Successfully generated exam with ID: ${createExamResponse.exam_ID}`);
+    return createExamResponse;
 
-      this.logger.log(
-        `Successfully generated exam with ID: ${examResponse.exam_ID}`,
-      );
-      return examResponse;
-    } catch (error) {
-      this.logger.error(
-        `Error in generateExamWithAI: ${error.message}`,
-        error.stack,
-      );
-      throw new InternalServerErrorException('Failed to generate exam with AI');
-    }
+  } catch (error) {
+    this.logger.error(`Error in generateExamWithAI: ${error.message}`, error.stack);
+    throw new InternalServerErrorException('Failed to generate exam with AI');
   }
+}
 
   private async enhanceExamWithGemini(
     examStructure: CreateExamDto,
