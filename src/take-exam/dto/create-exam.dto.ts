@@ -58,3 +58,67 @@ export class CreateExamDto {
   @IsNotEmpty()
   round_3: CreateQuestionDto[];
 }
+
+export class ReadUnitDto {
+  @IsNotEmpty()
+  @IsString()
+  title: string;
+}
+
+export class ReadDto {
+  @ValidateNested()
+  @Type(() => ReadUnitDto)
+  @IsNotEmpty()
+  read: ReadUnitDto;
+}
+
+export class UnitDto {
+  @IsNotEmpty()
+  @IsString()
+  unit_type: string;
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ReadDto)
+  @IsNotEmpty()
+  subunit: ReadDto[];
+}
+
+export class ModuleDto {
+  @IsNotEmpty()
+  @IsString()
+  module_title: string;
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => UnitDto)
+  @IsNotEmpty()
+  units: UnitDto[];
+}
+
+export class RoadmapDataDto {
+  @IsNotEmpty()
+  @IsString()
+  roadmap_title: string;
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ModuleDto)
+  @IsNotEmpty()
+  modules: ModuleDto[];
+}
+
+export class GenerateExamDto {
+  @IsNotEmpty()
+  @IsString()
+  roadmapId: string;
+
+  @IsNotEmpty()
+  @IsString()
+  examId: string;
+
+  @ValidateNested()
+  @Type(() => RoadmapDataDto)
+  @IsNotEmpty()
+  roadmapData: RoadmapDataDto;
+}

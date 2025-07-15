@@ -9,31 +9,20 @@ import {
   Param,
   Post,
   Query,
+  UsePipes,
+  ValidationPipe,
 } from '@nestjs/common';
-import { CreateExamDto } from './dto/create-exam.dto';
+import { CreateExamDto, GenerateExamDto } from './dto/create-exam.dto';
 import { ExamProgressDocument } from './schema/exam-progress.schema';
 import { Exam } from './schema/exam.schema';
 import { TakeExamService } from './take-exam.service';
 import { ExamProgressService } from './take-examProgress.service';
-import { IFrontendQuestion, IQuestion } from './utils/question-validator.util';
-
-// Define interfaces for type safety
-interface RoadmapData {
-  roadmap_title: string;
-  modules: {
-    module_title: string;
-    units: {
-      unit_type: string;
-      subunit: {
-        read?: { title: string };
-      }[];
-    }[];
-  }[];
-}
+import { IQuestion } from './utils/question-validator.util';
 
 @Controller('take-exam')
 export class TakeExamController {
   private readonly logger = new Logger(TakeExamController.name);
+
   constructor(
     private readonly takeExamService: TakeExamService,
     private readonly takeExamProgressService: ExamProgressService,
@@ -42,92 +31,55 @@ export class TakeExamController {
   @Get()
   async getExamByRoadmapId(
     @Query('roadmap_ID') roadmapId: string,
-  ): Promise<Exam> {
-    const exam = await this.takeExamService.getExamByRoadmapId(roadmapId);
-    if (!exam) {
+  ): Promise<any> {
+    const response = await this.takeExamService.getExamByRoadmapId(roadmapId);
+    if (!response) {
       throw new NotFoundException(
         `Exam with roadmap_ID ${roadmapId} not found`,
       );
     }
-    return exam;
+    return response;
   }
 
-  @Get('get/:examId')
-  async findExamById(
-    @Param('examId') examId: string,
-  ): Promise<Exam> {
+  @Get(':examId')
+  async findExamById(@Param('examId') examId: string): Promise<Exam> {
     const exam = await this.takeExamService.findExamById(examId);
     if (!exam) {
-      throw new NotFoundException(
-        `Exam with ID ${examId} not found`,
-      );
+      throw new NotFoundException(`Exam with ID ${examId} not found`);
     }
     return exam;
   }
 
   @Post()
+  @UsePipes(new ValidationPipe({ transform: true }))
   async createExam(@Body() createExamDto: CreateExamDto): Promise<Exam> {
     return this.takeExamService.createExam(createExamDto);
   }
 
   @Post('generate')
-  async generateExamByRoadmapTitle(
-    @Body() body: { roadmapData: RoadmapData; roadmapId: string; examId: string },
-  ): Promise<Exam> {
-    const { roadmapData, roadmapId, examId } = body;
-
-    // Validate input
-    if (!roadmapData || !roadmapId || !examId) {
-      this.logger.error(
-        `Missing required fields: ${!roadmapData ? 'roadmapData' : ''} ${
-          !roadmapId ? 'roadmapId' : ''
-        } ${!examId ? 'examId' : ''}`.trim(),
-      );
-      throw new HttpException(
-        'Missing required fields: roadmapData, roadmapId, or examId',
-        HttpStatus.BAD_REQUEST,
-      );
-    }
-
-    // Validate roadmapData structure
-    if (!roadmapData.roadmap_title || typeof roadmapData.roadmap_title !== 'string') {
-      this.logger.error(`Invalid roadmapData: roadmap_title is missing or not a string`);
-      throw new HttpException(
-        'Invalid roadmapData: roadmap_title must be a non-empty string',
-        HttpStatus.BAD_REQUEST,
-      );
-    }
-
-    if (!Array.isArray(roadmapData.modules) || roadmapData.modules.length === 0) {
-      this.logger.error(`Invalid roadmapData: modules is missing or empty`);
-      throw new HttpException(
-        'Invalid roadmapData: modules must be a non-empty array',
-        HttpStatus.BAD_REQUEST,
-      );
-    }
-
-    // Validate UUID format
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (!uuidRegex.test(roadmapId) || !uuidRegex.test(examId)) {
-      this.logger.error('Invalid UUID format for roadmapId or examId');
-      throw new HttpException('Invalid roadmapId or examId format', HttpStatus.BAD_REQUEST);
-    }
-
+  @UsePipes(new ValidationPipe({ transform: true }))
+  async generateExam(@Body() generateExamDto: GenerateExamDto): Promise<any> {
     try {
-      this.logger.log(`Generating exam for roadmapId: ${roadmapId}, examId: ${examId}`);
-      this.logger.debug(`Request body: ${JSON.stringify(body, null, 2)}`);
-      const exam = await this.takeExamService.generateExamByRoadmapTitle(roadmapData, roadmapId, examId);
-      this.logger.log(`Exam generated successfully: ${examId}`);
-      return exam;
-    } catch (error) {
-      this.logger.error(`Failed to generate exam: ${error.message}`, error.stack);
-      if (error instanceof HttpException) {
-        throw error;
-      }
-      throw new HttpException(
-        'Failed to process exam generation request',
-        HttpStatus.INTERNAL_SERVER_ERROR,
+      this.logger.log(
+        `Received exam generation request for roadmap: ${generateExamDto.roadmapId}`,
       );
+
+      // Generate exam with AI enhancement
+      const generatedExam = await this.takeExamService.generateExamWithAI(
+        generateExamDto.roadmapId,
+        generateExamDto.examId,
+        generateExamDto.roadmapData,
+      );
+
+      return generatedExam;
+    } catch (error) {
+      this.logger.error(`Error generating exam: ${error.message}`, error.stack);
+
+      return {
+        success: false,
+        message: 'Failed to generate exam',
+        error: error.message,
+      };
     }
   }
 
@@ -158,40 +110,36 @@ export class TakeExamController {
     }
   }
 
-  // @Get('get/:examId')
-  // async getProgress(
-  //   @Query('examId') examId: string,
-  // ): Promise<ExamProgressDocument | null> {
-  //   try {
-  //     const progress = await this.takeExamProgressService.getProgress(examId);
-  //     if (!progress) {
-  //       throw new HttpException('Progress not found', HttpStatus.NOT_FOUND);
-  //     }
-  //     return progress;
-  //   } catch (error) {
-  //     throw new HttpException(
-  //       error.message || 'Failed to retrieve progress',
-  //       HttpStatus.INTERNAL_SERVER_ERROR,
-  //     );
-  //   }
-  // }
-
   @Post('submit/:examId')
   async submitAnswer(
     @Param('examId') examId: string,
-    @Body() body: { quiz_answers: { question: string; answer: string | string[] | boolean }[] },
+    @Body()
+    body: {
+      quiz_answers: { question: string; answer: string | string[] | boolean }[];
+    },
   ): Promise<ExamProgressDocument> {
     try {
       const { quiz_answers } = body;
 
       // Validate quiz_answers
-      if (!quiz_answers || !Array.isArray(quiz_answers) || quiz_answers.length === 0) {
-        throw new HttpException('Invalid or missing quiz_answers data', HttpStatus.BAD_REQUEST);
+      if (
+        !quiz_answers ||
+        !Array.isArray(quiz_answers) ||
+        quiz_answers.length === 0
+      ) {
+        throw new HttpException(
+          'Invalid or missing quiz_answers data',
+          HttpStatus.BAD_REQUEST,
+        );
       }
 
       // Validate each answer entry
       for (const answer of quiz_answers) {
-        if (!answer.question || answer.answer === undefined || answer.answer === null) {
+        if (
+          !answer.question ||
+          answer.answer === undefined ||
+          answer.answer === null
+        ) {
           throw new HttpException(
             'Missing or invalid question/answer data in quiz_answers',
             HttpStatus.BAD_REQUEST,
@@ -237,7 +185,9 @@ export class TakeExamController {
       let maxMatchCount = 0;
       for (const [round, questions] of Object.entries(roundsMap)) {
         const questionSet = new Set(questions.map((q) => q.question));
-        const matchCount = quiz_answers.filter((answer) => questionSet.has(answer.question)).length;
+        const matchCount = quiz_answers.filter((answer) =>
+          questionSet.has(answer.question),
+        ).length;
         if (matchCount > maxMatchCount) {
           maxMatchCount = matchCount;
           matchedRound = round;
@@ -246,14 +196,21 @@ export class TakeExamController {
       }
 
       if (!matchedRound || maxMatchCount === 0) {
-        throw new HttpException('No matching round found for the provided answers', HttpStatus.BAD_REQUEST);
+        throw new HttpException(
+          'No matching round found for the provided answers',
+          HttpStatus.BAD_REQUEST,
+        );
       }
 
       // Prepare frontend payload for the matched round
       const frontendPayload = { quiz_answers };
 
       // Call submitAnswer for the matched round
-      return await this.takeExamProgressService.submitAnswer(examId, frontendPayload, matchedBackendQuestions);
+      return await this.takeExamProgressService.submitAnswer(
+        examId,
+        frontendPayload,
+        matchedBackendQuestions,
+      );
     } catch (error) {
       console.error('Error in submitAnswer:', error);
       throw new HttpException(
