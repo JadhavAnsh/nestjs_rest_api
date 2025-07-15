@@ -2,6 +2,7 @@ import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { Types } from 'mongoose';
 import { ExamProgressDocument } from '../schema/exam-progress.schema';
 
+//Backend Question
 export interface IQuestion {
   question: string;
   exam_options?: string[];

@@ -5,8 +5,15 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import {ExamProgress,ExamProgressDocument,} from './schema/exam-progress.schema';
-import {IFrontendQuestion,IQuestion,validateAnswer,} from './utils/question-validator.util';
+import {
+  ExamProgress,
+  ExamProgressDocument,
+} from './schema/exam-progress.schema';
+import {
+  IFrontendQuestion,
+  IQuestion,
+  validateAnswer,
+} from './utils/question-validator.util';
 
 @Injectable()
 export class ExamProgressService {
@@ -21,7 +28,6 @@ export class ExamProgressService {
     correctQuestions: number,
   ): Promise<ExamProgressDocument> {
     try {
-      // Validate inputs
       if (
         !Number.isInteger(totalQuestions) ||
         !Number.isInteger(correctQuestions) ||
@@ -36,39 +42,29 @@ export class ExamProgressService {
 
       const percentage = (correctQuestions / totalQuestions) * 100;
 
-      // Find progress document
       let progress = await this.examProgressModel.findOne({ examId }).exec();
 
       if (!progress) {
-        // If no progress found, create new with initial values but do not increment attempts or add to attempt_Log here
         progress = new this.examProgressModel({
           examId,
           total_questions: totalQuestions,
           correct_questions: correctQuestions,
-          //has_started: true,
           attempts: 0,
           highest_percentage: percentage,
           attempt_Log: [],
           lockUntil: null,
-          answerLog: [], // Initialize empty answerLog
+          answerLog: [],
         });
       } else {
-        // Update progress with new values
         progress.total_questions = totalQuestions;
         progress.correct_questions = correctQuestions;
-        //progress.has_started = true;
-        progress.is_completed = correctQuestions === totalQuestions;
 
-        // Update highest_percentage if the new percentage is higher
         if (percentage > progress.highest_percentage) {
           progress.highest_percentage = percentage;
         }
-
-        // Do NOT update attempts or attempt_Log here to avoid duplication
       }
 
-      const savedProgress = await progress.save();
-      return savedProgress;
+      return progress;
     } catch (error) {
       console.error('Error in calculateProgress:', error);
       throw new BadRequestException('Failed to calculate progress');
@@ -260,6 +256,9 @@ export class ExamProgressService {
           `[${attemptTimestamp.toISOString()}] Lock applied (1 minute), lockCount=${progress.lockCount}`,
         );
       }
+
+      //  Mark as completed if all correct
+      progress.is_completed = true;
 
       //  Save all changes
       await progress.save();
