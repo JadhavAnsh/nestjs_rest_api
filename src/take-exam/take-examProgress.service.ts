@@ -171,10 +171,26 @@ export class ExamProgressService {
           );
         }
 
+        // For accepting the boolean as string or boolean both okays
+        let answer = frontendAnswer.answer;
+        if (backendQuestion.question_type === 'true_false') {
+          if (typeof answer === 'string') {
+            if (answer.toLowerCase() === 'true') {
+              answer = true;
+            } else if (answer.toLowerCase() === 'false') {
+              answer = false;
+            } else {
+              throw new BadRequestException('True/False answer must be a boolean or "true"/"false" string');
+            }
+          } else if (typeof answer !== 'boolean') {
+            throw new BadRequestException('True/False answer must be a boolean');
+          }
+        }
+
         const frontendQuestion: IFrontendQuestion = {
           question: frontendAnswer.question,
           question_type: backendQuestion.question_type,
-          answer: frontendAnswer.answer,
+          answer: answer,
           exam_options: backendQuestion.exam_options,
         };
 
