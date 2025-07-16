@@ -518,23 +518,26 @@ async generateExamWithAI(
 
     const createExamResponse = await this.createExam(enhancedExam);
     
-    // Step 4: Return exam as JSON response instead of saving to database
-    // const examResponse = {
-    //   roadmap_ID: roadmapId,
-    //   exam_ID: examId,
-    //   exam_title: enhancedExam.exam_title,
-    //   exam_description: enhancedExam.exam_description,
-    //   exam_levels: enhancedExam.exam_levels,
-    //   passing_score: enhancedExam.passing_score,
-    //   exam_time: enhancedExam.exam_time,
-    //   tags: enhancedExam.tags,
-    //   round_1: enhancedExam.round_1,
-    //   round_2: enhancedExam.round_2,
-    //   round_3: enhancedExam.round_3,
-    // };
+    // Step 4: Store exam response in variable and pass to createExam function
+    const examResponse = {
+      roadmap_ID: roadmapId,
+      exam_ID: examId,
+      exam_title: enhancedExam.exam_title,
+      exam_description: enhancedExam.exam_description,
+      exam_levels: enhancedExam.exam_levels,
+      passing_score: enhancedExam.passing_score,
+      exam_time: enhancedExam.exam_time,
+      tags: enhancedExam.tags,
+      round_1: enhancedExam.round_1,
+      round_2: enhancedExam.round_2,
+      round_3: enhancedExam.round_3,
+    };
     
-    this.logger.log(`Successfully generated exam with ID: ${createExamResponse.exam_ID}`);
-    return createExamResponse;
+    // Store the exam in the database using createExam function
+    const createdExam = await this.createExam(examResponse);
+    
+    this.logger.log(`Successfully generated and stored exam with ID: ${examResponse.exam_ID}`);
+    return createdExam;
 
   } catch (error) {
     this.logger.error(`Error in generateExamWithAI: ${error.message}`, error.stack);
