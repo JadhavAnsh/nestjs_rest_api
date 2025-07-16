@@ -2,8 +2,9 @@ import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { Types } from 'mongoose';
 import { ExamProgressDocument } from '../schema/exam-progress.schema';
 
-//Backend Question
+// Backend Question
 export interface IQuestion {
+  _id: Types.ObjectId;
   question: string;
   exam_options?: string[];
   question_type: 'single_choice' | 'multiple_choice' | 'true_false';
@@ -13,6 +14,7 @@ export interface IQuestion {
 
 // Frontend Question interface (includes submitted answer)
 export interface IFrontendQuestion {
+  _id: string;
   question: string;
   exam_options?: string[];
   question_type: 'single_choice' | 'multiple_choice' | 'true_false';
@@ -26,29 +28,21 @@ export async function validateAnswer(
   currentScore: number = 0,
 ): Promise<{ isCorrect: boolean; message?: string; updatedScore: number }> {
   // Validate frontend input
-  if (!frontendQuestion?.question || !frontendQuestion?.question_type) {
+  if (!frontendQuestion?._id || !frontendQuestion?.question_type) {
     throw new BadRequestException('Invalid or missing question data from frontend');
   }
   if (frontendQuestion.answer === undefined || frontendQuestion.answer === null) {
     throw new BadRequestException('Invalid or missing answer data from frontend');
   }
 
-  // Normalize text to handle whitespace, multiple spaces, and special characters
-  const normalizeText = (text: string) =>
-    text
-      .trim()
-      .toLowerCase()
-      .replace(/\s+/g, ' ') // Normalize multiple spaces to single space
-      .replace(/[\u200B-\u200D\uFEFF]/g, ''); // Remove zero-width spaces and other invisible characters
-
-  // Find matching backend question by normalized question text
+  // Find matching backend question by _id
   const backendQuestion = backendQuestions.find(
-    (q) => normalizeText(q.question) === normalizeText(frontendQuestion.question),
+    (q) => q._id.toString() === frontendQuestion._id,
   );
 
-  // If no match is found, log detailed mismatch info
+  // If no match is found
   if (!backendQuestion) {
-    throw new NotFoundException('No matching question found in backend data');
+    throw new NotFoundException(`No matching question found for ID: ${frontendQuestion._id}`);
   }
 
   // Validate question type consistency
@@ -72,6 +66,14 @@ export async function validateAnswer(
   let isCorrect = false;
   let scoreIncrement = 0;
 
+  // Normalize text to handle whitespace, multiple spaces, and special characters
+  const normalizeText = (text: string) =>
+    text
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, ' ')
+      .replace(/[\u200B-\u200D\uFEFF]/g, '');
+
   switch (backendQuestion.question_type) {
     case 'single_choice':
       if (typeof submittedAnswer !== 'string') {
@@ -80,7 +82,6 @@ export async function validateAnswer(
       if (typeof backendQuestion.correct_options !== 'number') {
         throw new BadRequestException('Invalid correct options for single choice');
       }
-      // Ensure exam_options exists and the correct_options index is valid
       if (
         !backendQuestion.exam_options ||
         backendQuestion.correct_options >= backendQuestion.exam_options.length
@@ -98,7 +99,6 @@ export async function validateAnswer(
       if (!Array.isArray(backendQuestion.correct_options) || backendQuestion.correct_options.length === 0) {
         throw new BadRequestException('Invalid correct options for multiple choice');
       }
-      // Ensure exam_options exists and all correct_options indices are valid
       if (
         !backendQuestion.exam_options ||
         backendQuestion.correct_options.some(
@@ -123,7 +123,6 @@ export async function validateAnswer(
       if (typeof backendQuestion.correct_options !== 'number') {
         throw new BadRequestException('Invalid correct options for true/false');
       }
-      // Map numeric correct_options (0 for true, 1 for false) to boolean
       const correctBoolean = backendQuestion.correct_options === 0 ? true : false;
       isCorrect = submittedAnswer === correctBoolean;
       scoreIncrement = isCorrect ? (backendQuestion.points || 1) : 0;

@@ -117,12 +117,13 @@ export class TakeExamController {
     }
   }
 
-  @Post('submit/:examId')
+
+ @Post('submit/:examId')
   async submitAnswer(
     @Param('examId') examId: string,
     @Body()
     body: {
-      quiz_answers: { question: string; answer: string | string[] | boolean }[];
+      quiz_answers: { _id: string; answer: string | string[] | boolean }[];
     },
   ): Promise<ExamProgressDocument> {
     try {
@@ -143,18 +144,18 @@ export class TakeExamController {
       // Validate each answer entry
       for (const answer of quiz_answers) {
         if (
-          !answer.question ||
+          !answer._id ||
           answer.answer === undefined ||
           answer.answer === null
         ) {
           throw new HttpException(
-            'Missing or invalid question/answer data in quiz_answers',
+            'Missing or invalid _id/answer data in quiz_answers',
             HttpStatus.BAD_REQUEST,
           );
         }
       }
 
-      // Fetch exam data
+      // Fetch exam data by examId
       const exam = await this.takeExamService.findExamById(examId);
       if (!exam) {
         console.error(`Exam not found for examId: ${examId}`);
@@ -164,25 +165,28 @@ export class TakeExamController {
       // Prepare rounds questions map
       const roundsMap: { [key: string]: IQuestion[] } = {
         round_1: (exam.round_1 || []).map((q: any) => ({
+          _id: q._id, // Include _id (e.g., "687671062898f0658cbf51f4")
           question: q.question,
           exam_options: q.exam_options,
           question_type: q.question_type,
           correct_options: q.correct_options,
-          points: 1,
+          points: q.points || 1,
         })),
         round_2: (exam.round_2 || []).map((q: any) => ({
+          _id: q._id,
           question: q.question,
           exam_options: q.exam_options,
           question_type: q.question_type,
           correct_options: q.correct_options,
-          points: 1,
+          points: q.points || 1,
         })),
         round_3: (exam.round_3 || []).map((q: any) => ({
+          _id: q._id,
           question: q.question,
           exam_options: q.exam_options,
           question_type: q.question_type,
           correct_options: q.correct_options,
-          points: 1,
+          points: q.points || 1,
         })),
       };
 
@@ -191,9 +195,9 @@ export class TakeExamController {
       let matchedBackendQuestions: IQuestion[] = [];
       let maxMatchCount = 0;
       for (const [round, questions] of Object.entries(roundsMap)) {
-        const questionSet = new Set(questions.map((q) => q.question));
+        const questionIdSet = new Set(questions.map((q) => q._id.toString()));
         const matchCount = quiz_answers.filter((answer) =>
-          questionSet.has(answer.question),
+          questionIdSet.has(answer._id),
         ).length;
         if (matchCount > maxMatchCount) {
           maxMatchCount = matchCount;
@@ -205,6 +209,16 @@ export class TakeExamController {
       if (!matchedRound || maxMatchCount === 0) {
         throw new HttpException(
           'No matching round found for the provided answers',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      // Validate that all quiz_answers _ids exist in the matched round
+      const validQuestionIds = new Set(matchedBackendQuestions.map((q) => q._id.toString()));
+      const invalidIds = quiz_answers.filter((answer) => !validQuestionIds.has(answer._id));
+      if (invalidIds.length > 0) {
+        throw new HttpException(
+          `Invalid question IDs: ${invalidIds.map((a) => a._id).join(', ')}`,
           HttpStatus.BAD_REQUEST,
         );
       }
@@ -227,3 +241,4 @@ export class TakeExamController {
     }
   }
 }
+

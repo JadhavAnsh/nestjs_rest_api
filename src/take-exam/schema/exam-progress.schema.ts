@@ -41,7 +41,7 @@ export class ExamProgress extends Document {
 
   @Prop({
     type: [{
-      //questionId: { type: Types.ObjectId, required: true, ref: 'Question' }, // Ref to question
+      questionId: { type: Types.ObjectId, required: true, ref: 'Question' }, // Ref to question
       selectedAnswer: { type: String, required: true }, // Answer selected by user
       correctAnswer: { type: String, required: true }, // Correct answer (from DB)
       isCorrect: { type: Boolean, required: true }, // Whether answer is correct
@@ -51,7 +51,7 @@ export class ExamProgress extends Document {
     default: [],
   })
   answerLog: {
-    //questionId: Types.ObjectId;
+    questionId: Types.ObjectId;
     selectedAnswer: string;
     correctAnswer: string;
     isCorrect: boolean;
