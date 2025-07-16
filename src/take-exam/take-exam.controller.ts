@@ -117,7 +117,6 @@ export class TakeExamController {
     }
   }
 
-
  @Post('submit/:examId')
   async submitAnswer(
     @Param('examId') examId: string,

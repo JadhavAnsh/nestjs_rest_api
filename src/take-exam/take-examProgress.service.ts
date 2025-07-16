@@ -71,7 +71,7 @@ export class ExamProgressService {
     }
   }
 
-async submitAnswer(
+ async submitAnswer(
   this: any,
   examId: string,
   frontendPayload: {
@@ -80,6 +80,18 @@ async submitAnswer(
   backendQuestions: IQuestion[],
 ): Promise<any> {
   try {
+    // Fallback for SAMPLE_QUESTIONS_COUNT
+    const DEFAULT_QUESTIONS_COUNT = 25; // Matches frontend payload
+    const SAMPLE_QUESTIONS_COUNT = this.SAMPLE_QUESTIONS_COUNT ?? DEFAULT_QUESTIONS_COUNT;
+
+    // Log input details for debugging
+    console.log(
+      `[${new Date().toISOString()}] submitAnswer called with examId: ${examId}, ` +
+      `quiz_answers length: ${frontendPayload.quiz_answers?.length || 0}, ` +
+      `backendQuestions length: ${backendQuestions.length}, ` +
+      `SAMPLE_QUESTIONS_COUNT: ${SAMPLE_QUESTIONS_COUNT}`
+    );
+
     // Validate payload
     if (
       !frontendPayload.quiz_answers ||
@@ -103,7 +115,7 @@ async submitAnswer(
     if (!progress) {
       progress = new this.examProgressModel({
         examId,
-        total_questions: backendQuestions.length,
+        total_questions: SAMPLE_QUESTIONS_COUNT,
         correct_questions: 0,
         attempts: 0,
         highest_percentage: 0,
@@ -113,39 +125,70 @@ async submitAnswer(
         answerLog: [],
         lastSubmittedAt: null,
       });
-      console.log(`[${attemptTimestamp.toISOString()}] Created new progress`);
+      console.log(
+        `[${attemptTimestamp.toISOString()}] Created new progress with total_questions: ${SAMPLE_QUESTIONS_COUNT}`,
+      );
     } else {
-      // Lock check
-      if (progress.lockUntil && progress.lockUntil > new Date()) {
-        const remainingSec = Math.ceil(
-          (progress.lockUntil.getTime() - new Date().getTime()) / 1000,
+      // Check if total_questions is incorrect
+      if (progress.total_questions !== SAMPLE_QUESTIONS_COUNT) {
+        console.warn(
+          `[${attemptTimestamp.toISOString()}] total_questions is ${progress.total_questions}, expected ${SAMPLE_QUESTIONS_COUNT}. Resetting to correct value.`,
         );
-        throw new BadRequestException(
-          `Exam is locked. Try again in ${remainingSec} seconds.`,
-        );
+        progress.total_questions = SAMPLE_QUESTIONS_COUNT;
       }
-
-      // If lock expired and 3 locks reached → reset everything
-      if (
-        progress.lockUntil &&
-        progress.lockUntil <= new Date() &&
-        progress.attempts >= 3
-      ) {
-        progress.attempts = 0;
-        progress.lockUntil = null;
-        progress.lockCount = 0;
-        console.log(
-          `[${attemptTimestamp.toISOString()}] Lock expired after 3 attempts → attempts reset`,
-        );
-      } else if (progress.lockUntil && progress.lockUntil <= new Date()) {
-        // Lock expired but not after 3rd attempt
-        progress.lockUntil = null;
-        console.log(`[${attemptTimestamp.toISOString()}] Lock expired`);
-      }
+      console.log(
+        `[${attemptTimestamp.toISOString()}] Existing progress found with total_questions: ${progress.total_questions}`,
+      );
     }
 
-    // Always update total questions and clear answer log
-    progress.total_questions = backendQuestions.length;
+    // Validate frontend payload against progress.total_questions
+    if (frontendPayload.quiz_answers.length !== progress.total_questions) {
+      console.error(
+        `[${attemptTimestamp.toISOString()}] Validation failed: Submitted answers count (${frontendPayload.quiz_answers.length}) does not match expected total questions (${progress.total_questions})`,
+      );
+      throw new BadRequestException(
+        `Submitted answers count (${frontendPayload.quiz_answers.length}) does not match expected total questions (${progress.total_questions})`,
+      );
+    }
+
+    // // Validate backendQuestions length matches progress.total_questions
+    // if (backendQuestions.length !== progress.total_questions) {
+    //   console.error(
+    //     `[${attemptTimestamp.toISOString()}] Validation failed: Backend questions count (${backendQuestions.length}) does not match expected total questions (${progress.total_questions})`,
+    //   );
+    //   throw new BadRequestException(
+    //     `Backend questions count (${backendQuestions.length}) does not match expected total questions (${progress.total_questions})`,
+    //   );
+    // }
+
+    // Lock check
+    if (progress.lockUntil && progress.lockUntil > new Date()) {
+      const remainingSec = Math.ceil(
+        (progress.lockUntil.getTime() - new Date().getTime()) / 1000,
+      );
+      throw new BadRequestException(
+        `Exam is locked. Try again in ${remainingSec} seconds.`,
+      );
+    }
+
+    // Handle lock expiration
+    if (
+      progress.lockUntil &&
+      progress.lockUntil <= new Date() &&
+      progress.attempts >= 3
+    ) {
+      progress.attempts = 0;
+      progress.lockUntil = null;
+      progress.lockCount = 0;
+      console.log(
+        `[${attemptTimestamp.toISOString()}] Lock expired after 3 attempts → attempts reset`,
+      );
+    } else if (progress.lockUntil && progress.lockUntil <= new Date()) {
+      progress.lockUntil = null;
+      console.log(`[${attemptTimestamp.toISOString()}] Lock expired`);
+    }
+
+    // Clear answer log
     progress.answerLog = [];
 
     // Increment attempts
@@ -170,7 +213,7 @@ async submitAnswer(
         );
       }
 
-      // For accepting boolean as string or boolean
+      // Handle true/false answers
       let answer = frontendAnswer.answer;
       if (backendQuestion.question_type === 'true_false') {
         if (typeof answer === 'string') {
@@ -232,7 +275,7 @@ async submitAnswer(
       }
 
       progress.answerLog.push({
-        questionId: backendQuestion._id, // Use questionId as per ExamProgress schema
+        questionId: backendQuestion._id,
         selectedAnswer,
         correctAnswer,
         isCorrect,
@@ -248,12 +291,12 @@ async submitAnswer(
     );
     progress.correct_questions = Math.min(
       correctCount,
-      backendQuestions.length,
+      progress.total_questions,
     );
 
     // Calculate percentage
     const percentage =
-      (progress.correct_questions / backendQuestions.length) * 100;
+      (progress.correct_questions / progress.total_questions) * 100;
     progress.lastSubmittedAt = attemptTimestamp;
 
     // Log attempt
@@ -277,7 +320,7 @@ async submitAnswer(
     }
 
     // Mark as completed if all correct
-    progress.is_completed = true;
+    progress.is_completed = progress.correct_questions === progress.total_questions;
 
     // Save all changes
     await progress.save();
@@ -285,7 +328,7 @@ async submitAnswer(
 
     const examProgress = await this.calculateProgress(
       examId,
-      backendQuestions.length,
+      progress.total_questions,
       progress.correct_questions,
     );
 
@@ -307,5 +350,4 @@ async submitAnswer(
     throw new BadRequestException('Failed to process answer submission');
   }
 }
-
 }
