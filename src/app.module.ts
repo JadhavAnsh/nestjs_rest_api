@@ -6,6 +6,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { TakeExamModule } from './take-exam/take-exam.module';
 import { UsersModule } from './users/users.module';
+import { AiModelScraperModule } from './ai-model-scraper/ai-model-scraper.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { UsersModule } from './users/users.module';
 
     UsersModule,
     TakeExamModule,
+    AiModelScraperModule,
   ],
   controllers: [AppController],
   providers: [AppService],
