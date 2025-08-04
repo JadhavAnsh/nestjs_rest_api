@@ -3,7 +3,7 @@
   "metadata": {
     "totalScraped": 0,
     "sources": [],
-    "timestamp": "2025-08-04T10:54:29.262Z",
+    "timestamp": "2025-08-04T12:51:19.799Z",
     "success": false,
     "errors": [
       "Failed to scrape FutureTools.io: Protocol error: Connection closed.",
